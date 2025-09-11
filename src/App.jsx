@@ -27,6 +27,7 @@ const MisProductos = lazy(()=>import('./pages/MisProductos.jsx'));
 const PanelProductor = lazy(()=>import('./pages/PanelProductor.jsx'));
 const Carrito = lazy(()=>import('./pages/Carrito.jsx'));
 const Checkout = lazy(()=>import('./pages/Checkout.jsx'));
+const Exito = lazy(()=>import('./pages/Exito.jsx'));
 const MisPedidos = lazy(()=>import('./pages/MisPedidos.jsx'));
 const AdminSolicitudes = lazy(()=>import('./pages/AdminSolicitudes.jsx'));
 const AdminPedidos = lazy(()=>import('./pages/AdminPedidos.jsx'));
@@ -36,8 +37,11 @@ const NotFound = lazy(()=>import('./pages/NotFound.jsx'));
 const Bienvenido = lazy(()=>import('./pages/Bienvenido.jsx'));
 const Codigo = lazy(()=>import('./pages/Codigo.jsx'));
 
-// 👇 NUEVO: AdminUsuarios
+// NUEVOS
 const AdminUsuarios = lazy(()=>import('./pages/AdminUsuarios.jsx'));
+const Entrega = lazy(()=>import('./pages/Entrega.jsx'));
+const PedidosProductor = lazy(()=>import('./pages/productor/Pedidos.jsx'));                // <—
+const PedidoDetalleProductor = lazy(()=>import('./pages/productor/PedidoDetalle.jsx'));    // <—
 
 export default function App(){
   return (
@@ -66,18 +70,80 @@ export default function App(){
               <Route path="/verifica-correo" element={<VerificaCorreo />} />
               <Route path="/perfil" element={<ProtectedRoute><Perfil/></ProtectedRoute>} />
               <Route path="/carrito" element={<Carrito />} />
+
               <Route path="/checkout/:pedidoId" element={<Checkout />} />
-              <Route path="/pedido/:pedidoId/exito" element={<div className="container py-4"><h4>¡Pago confirmado!</h4></div>} />
-              <Route path="/mis-productos" element={<ProtectedRoute><RoleGuard allow={['productor','admin']}><MisProductos/></RoleGuard></ProtectedRoute>} />
-              <Route path="/panel/productor" element={<ProtectedRoute><RoleGuard allow={['productor','admin']}><PanelProductor/></RoleGuard></ProtectedRoute>} />
+
+              <Route path="/exito/:pedidoId" element={<ProtectedRoute><Exito /></ProtectedRoute> }/>
+
+              {/* Nuevas rutas de entrega/éxito */}
+              <Route
+                path="/entrega/:pedidoId"
+                element={
+                  <ProtectedRoute>
+                    <Entrega />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/exito/:pedidoId"
+                element={
+                  <div className="container py-4">
+                    <h4>¡Pago y datos de entrega guardados! 🎉</h4>
+                  </div>
+                }
+              />
+
+              {/* Panel productor */}
+              <Route
+                path="/mis-productos"
+                element={
+                  <ProtectedRoute>
+                    <RoleGuard allow={['productor','admin']}>
+                      <MisProductos/>
+                    </RoleGuard>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/panel/productor"
+                element={
+                  <ProtectedRoute>
+                    <RoleGuard allow={['productor','admin']}>
+                      <PanelProductor/>
+                    </RoleGuard>
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* 👇 NUEVAS RUTAS solicitadas */}
+              <Route
+                path="/productor/pedidos"
+                element={
+                  <ProtectedRoute>
+                    <RoleGuard allow={['productor','admin']}>
+                      <PedidosProductor />
+                    </RoleGuard>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/productor/pedidos/:pedidoId"
+                element={
+                  <ProtectedRoute>
+                    <RoleGuard allow={['productor','admin']}>
+                      <PedidoDetalleProductor />
+                    </RoleGuard>
+                  </ProtectedRoute>
+                }
+              />
+
               <Route path="/mis-pedidos" element={<ProtectedRoute><MisPedidos/></ProtectedRoute>} />
               <Route path="/reportes" element={<ProtectedRoute><RoleGuard allow={['productor','admin']}><Reportes/></RoleGuard></ProtectedRoute>} />
 
+              {/* Admin */}
               <Route path="/admin/solicitudes" element={<ProtectedRoute><RoleGuard allow={['admin']}><AdminSolicitudes/></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/pedidos" element={<ProtectedRoute><RoleGuard allow={['admin']}><AdminPedidos/></RoleGuard></ProtectedRoute>} />
               <Route path="/admin/categorias" element={<ProtectedRoute><RoleGuard allow={['admin']}><AdminCategorias/></RoleGuard></ProtectedRoute>} />
-
-              {/* 👇 NUEVA RUTA ADMIN-ONLY */}
               <Route
                 path="/admin/usuarios"
                 element={

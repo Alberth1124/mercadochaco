@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { invokeOrFetch } from '../lib/functions';
+import { showToast } from '../utils/toast'; // ✅ usa tu ToasterMC
 
 export default function Checkout(){
   const { pedidoId } = useParams();
@@ -10,12 +11,15 @@ export default function Checkout(){
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // 👇 Exigir sesión antes de cualquier cosa
+  // Exigir sesión
   useEffect(()=>{
     (async ()=>{
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        navigate('/login', { replace:true, state:{ toast:{ title:'Inicia sesión', body:'Necesitas iniciar sesión para pagar.', variant:'warning' } }});
+        navigate('/login', {
+          replace:true,
+          state:{ toast:{ title:'Inicia sesión', body:'Necesitas iniciar sesión para pagar.', variant:'warning' } }
+        });
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -31,8 +35,8 @@ export default function Checkout(){
     if (error || !data) throw new Error('Pedido inválido');
 
     if (data.estado === 'pagado') {
-      // si ya está pagado, no generamos QR y redirigimos
-      navigate(`/pedido/${pedidoId}/exito`, { replace:true });
+      // Si ya está pagado, ir directo a entrega
+      navigate(`/entrega/${pedidoId}`, { replace:true });
       throw new Error('Pedido ya pagado');
     }
     if (data.estado !== 'pendiente') throw new Error('El pedido no está pendiente');
@@ -43,27 +47,22 @@ export default function Checkout(){
   async function generarQR(){
     setLoading(true);
     try{
-      // 1) token de sesión
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error('Sesión no válida. Inicia sesión nuevamente.');
       const token = session.access_token;
 
-      // 2) validar pedido + monto
       const monto = await getMontoPedido();
 
-      // 3) invocar función con Authorization: Bearer <token>
       const data = await invokeOrFetch('sip-genera-qr', {
         pedido_id: pedidoId,
         monto,
         glosa: `Pedido ${pedidoId}`
-      }, { token }); // <<--- enviamos el token
+      }, { token });
 
-      // { base64, idQr, expira } esperado
       if (!data?.base64) throw new Error('No se recibió imagen de QR');
       setImg(`data:image/png;base64,${data.base64}`);
       setVenc(data.expira || null);
     } catch (e){
-      console.error(e);
       const msg = e?.message || 'No se pudo generar el QR';
       if (!/ya pagado/i.test(msg)) alert(msg);
     } finally {
@@ -73,7 +72,7 @@ export default function Checkout(){
 
   useEffect(()=>{ if (pedidoId) generarQR(); /* eslint-disable-next-line */ }, [pedidoId]);
 
-  // Realtime: cuando pagos_sip.estado -> confirmado => redirige
+  // ✅ Realtime: confirmado → toast + /entrega/:pedidoId
   useEffect(()=>{
     if (!pedidoId) return;
     const ch = supabase
@@ -85,7 +84,8 @@ export default function Checkout(){
         filter: `pedido_id=eq.${pedidoId}`
       }, payload=>{
         if (payload.new?.estado === 'confirmado'){
-          navigate(`/pedido/${pedidoId}/exito`, { replace:true });
+          showToast({ title: '¡Pago confirmado!', body: 'Ahora completa los datos de entrega.', variant: 'success' });
+          navigate(`/entrega/${pedidoId}`, { replace:true });
         }
       })
       .subscribe();
