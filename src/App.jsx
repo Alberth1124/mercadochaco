@@ -67,7 +67,7 @@ export default function App(){
               <Route path="/perfil" element={<ProtectedRoute><Perfil/></ProtectedRoute>} />
               <Route path="/carrito" element={<Carrito />} />
               <Route path="/checkout/:pedidoId" element={<Checkout />} />
-<Route path="/pedido/:pedidoId/exito" element={<div className="container py-4"><h4>¡Pago confirmado!</h4></div>} />
+              <Route path="/pedido/:pedidoId/exito" element={<div className="container py-4"><h4>¡Pago confirmado!</h4></div>} />
               <Route path="/mis-productos" element={<ProtectedRoute><RoleGuard allow={['productor','admin']}><MisProductos/></RoleGuard></ProtectedRoute>} />
               <Route path="/panel/productor" element={<ProtectedRoute><RoleGuard allow={['productor','admin']}><PanelProductor/></RoleGuard></ProtectedRoute>} />
               <Route path="/mis-pedidos" element={<ProtectedRoute><MisPedidos/></ProtectedRoute>} />

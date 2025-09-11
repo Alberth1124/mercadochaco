@@ -1,16 +1,15 @@
-// src/pages/Checkout.jsx
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import { invokeOrFetch } from '../lib/functions';
 
 export default function Checkout(){
-  const { pedidoId } = useParams();             // viene de /checkout/:pedidoId
-  const [img, setImg] = useState(null);
+  const { pedidoId } = useParams();
+  const [img, setImg]   = useState(null);
   const [venc, setVenc] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // 1) Traer el total del pedido (para no hardcodear el monto)
   async function getMontoPedido(){
     const { data, error } = await supabase
       .from('pedidos')
@@ -22,29 +21,29 @@ export default function Checkout(){
     return Number(data.total || 0);
   }
 
-  // 2) Generar el QR a través de la Edge Function
   async function generarQR(){
     setLoading(true);
     try{
       const monto = await getMontoPedido();
-      // IMPORTANTE: usa invoke() del SDK (maneja CORS y dominio de funciones)
-      const { data, error } = await supabase.functions.invoke('sip-genera-qr', {
-        body: { pedido_id: pedidoId, monto, glosa: `Pedido ${pedidoId}` }
+      const data = await invokeOrFetch('sip-genera-qr', {
+        pedido_id: pedidoId,
+        monto,
+        glosa: `Pedido ${pedidoId}`
       });
-      if (error) throw error;
-      // data: { base64, idQr, expira }
+      // { base64, idQr, expira }
       setImg(`data:image/png;base64,${data.base64}`);
       setVenc(data.expira);
     } catch (e){
+      console.error(e);
       alert(e.message || 'No se pudo generar el QR');
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(()=>{ generarQR(); /* al entrar a la pantalla */ }, [pedidoId]);
+  useEffect(()=>{ generarQR(); }, [pedidoId]);
 
-  // 3) Realtime: escuchar el cambio de estado del pago
+  // Realtime: en cuanto cambie pagos_sip.estado a confirmado => redirige
   useEffect(()=>{
     const ch = supabase
       .channel(`pago_${pedidoId}`)
@@ -66,7 +65,6 @@ export default function Checkout(){
   return (
     <div className="container py-4">
       <h4>Paga con QR</h4>
-
       {loading && <p>Generando QR…</p>}
       {!loading && img && (
         <>

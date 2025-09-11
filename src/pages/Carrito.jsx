@@ -10,21 +10,45 @@ const money = (v) => {
   return Number.isFinite(n) ? n.toFixed(2) : "0.00";
 };
 
+// Normaliza un item
+const getIds = (it) => ({
+  id: it.producto_id || it?.producto?.id || it?.id,
+  precio: Number(it?.producto?.precio ?? it?.precio ?? 0),
+  qty: Number(it?.cantidad ?? 0),
+});
+
 export default function Carrito() {
   const { items, total, updateQty, remove, clear } = useCart();
   const [updating, setUpdating] = useState(null);
   const [placing, setPlacing] = useState(false);
   const navigate = useNavigate();
 
+  // Dedupe de items (si hay mismo producto dos veces)
+  const itemsDedup = useMemo(() => {
+    const map = new Map();
+    (items || []).forEach((it) => {
+      const { id, precio, qty } = getIds(it);
+      if (!id || qty <= 0) return;
+      const prev = map.get(id)?.qty || 0;
+      map.set(id, {
+        ...it,
+        producto_id: id,
+        cantidad: prev + qty,
+        precio: Number.isFinite(precio) ? precio : 0,
+      });
+    });
+    return Array.from(map.values());
+  }, [items]);
+
   // Total “a prueba de balas”
   const safeTotal = useMemo(() => {
     if (Number.isFinite(Number(total))) return Number(total);
-    return (items || []).reduce((acc, it) => {
-      const precio = Number(it?.producto?.precio ?? it?.precio ?? 0);
-      const qty = Number(it?.cantidad ?? 0);
-      return acc + (Number.isFinite(precio) ? precio : 0) * (Number.isFinite(qty) ? qty : 0);
+    return (itemsDedup || []).reduce((acc, it) => {
+      const p = Number(it?.producto?.precio ?? it?.precio ?? 0);
+      const q = Number(it?.cantidad ?? 0);
+      return acc + (Number.isFinite(p) ? p : 0) * (Number.isFinite(q) ? q : 0);
     }, 0);
-  }, [items, total]);
+  }, [itemsDedup, total]);
 
   const onChangeQty = async (producto_id, newVal) => {
     setUpdating(producto_id);
@@ -36,42 +60,71 @@ export default function Carrito() {
     }
   };
 
-  const inc = async (it) => onChangeQty(it.producto_id, Number(it.cantidad || 0) + 1);
-  const dec = async (it) => onChangeQty(it.producto_id, Math.max(0, Number(it.cantidad || 0) - 1));
+  const inc = async (it) => onChangeQty(getIds(it).id, Number(it.cantidad || 0) + 1);
+  const dec = async (it) => onChangeQty(getIds(it).id, Math.max(0, Number(it.cantidad || 0) - 1));
 
   // === CONTINUAR AL PAGO ===
   const continuarPago = async () => {
-    if (!items || !items.length) return;
-    setPlacing(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { alert("Debes iniciar sesión para pagar."); setPlacing(false); return; }
+    if (!itemsDedup.length) return;
+    if (safeTotal <= 0) { alert("El total debe ser mayor a cero."); return; }
 
+    // Evita doble click
+    if (placing) return;
+    setPlacing(true);
+
+    try {
+      // 1) Sesión
+      const { data: { user }, error: errUser } = await supabase.auth.getUser();
+      if (errUser) throw errUser;
+      if (!user) {
+        alert("Debes iniciar sesión para pagar.");
+        setPlacing(false);
+        navigate("/login?next=/carrito");
+        return;
+      }
+
+      // 2) Crear pedido pendiente
       const totalNumber = Number(safeTotal) || 0;
       const { data: pedido, error: errPedido } = await supabase
         .from("pedidos")
-        .insert({ cliente_id: user.id, total: totalNumber, estado: "pendiente" })
-        .select("id").single();
+        .insert({
+          cliente_id: user.id,
+          total: totalNumber,
+          estado: "pendiente",
+        })
+        .select("id")
+        .single();
       if (errPedido) throw errPedido;
 
       const pedidoId = pedido.id;
-      const rows = (items || []).map((it) => ({
+
+      // 3) Insertar items del pedido
+      const rows = itemsDedup.map((it) => ({
         pedido_id: pedidoId,
-        producto_id: it.producto_id || it?.producto?.id || it?.id,
+        producto_id: getIds(it).id,
         cantidad: Number(it?.cantidad || 0),
+        // Usa el nombre de columna real de tu tabla (aquí: precio_unit)
         precio_unit: Number(it?.producto?.precio ?? it?.precio ?? 0),
       })).filter(r => r.producto_id && r.cantidad > 0);
 
       if (!rows.length) {
+        // Limpieza si no hay filas válidas
         await supabase.from("pedidos").delete().eq("id", pedidoId);
         throw new Error("No hay items válidos en el carrito.");
       }
 
       const { error: errItems } = await supabase.from("pedidos_items").insert(rows);
-      if (errItems) { await supabase.from("pedidos").delete().eq("id", pedidoId); throw errItems; }
+      if (errItems) {
+        // Rollback simple si falla items
+        await supabase.from("pedidos").delete().eq("id", pedidoId);
+        throw errItems;
+      }
 
+      // 4) Navegar al Checkout
       navigate(`/checkout/${pedidoId}`);
-      // clear(); // opcional
+
+      // (Opcional) vaciar carrito después de navegar
+      // clear();
     } catch (e) {
       console.error(e);
       alert(e.message || "No se pudo crear el pedido.");
@@ -80,7 +133,7 @@ export default function Carrito() {
     }
   };
 
-  if (!items || items.length === 0) {
+  if (!itemsDedup.length) {
     return (
       <Card className="mt-3">
         <Card.Body>
@@ -93,14 +146,13 @@ export default function Carrito() {
   }
 
   const renderRowData = (it) => {
-    const id = it.producto_id || it?.producto?.id || it?.id;
+    const id = getIds(it).id;
     const nombre = it?.producto?.nombre ?? it?.nombre ?? "Producto";
     const precio = Number(it?.producto?.precio ?? it?.precio ?? 0);
     const qty = Number(it?.cantidad ?? 0);
     const line = (Number.isFinite(precio) ? precio : 0) * (Number.isFinite(qty) ? qty : 0);
     const img = it?.producto?.imagen_portada_url || null;
     const slug = it?.producto?.slug;
-
     return { id, nombre, precio, qty, line, img, slug };
   };
 
@@ -121,7 +173,7 @@ export default function Carrito() {
             </tr>
           </thead>
           <tbody>
-            {items.map((it) => {
+            {itemsDedup.map((it) => {
               const { id, nombre, precio, qty, line, img, slug } = renderRowData(it);
               return (
                 <tr key={id}>
@@ -198,7 +250,7 @@ export default function Carrito() {
 
         <div className="d-flex justify-content-between">
           <Button variant="outline-secondary" onClick={clear}>Vaciar carrito</Button>
-          <Button variant="success" onClick={continuarPago} disabled={placing || !items.length}>
+          <Button variant="success" onClick={continuarPago} disabled={placing || !itemsDedup.length}>
             {placing ? "Creando pedido..." : "Continuar al pago"}
           </Button>
         </div>
@@ -207,7 +259,7 @@ export default function Carrito() {
       {/* ====== Móvil (xs–sm): Tarjetas ====== */}
       <div className="d-md-none">
         <div className="d-flex flex-column gap-2">
-          {items.map((it) => {
+          {itemsDedup.map((it) => {
             const { id, nombre, precio, qty, line, img, slug } = renderRowData(it);
             return (
               <Card key={id} className="shadow-sm">
@@ -287,7 +339,7 @@ export default function Carrito() {
               <Button
                 variant="success"
                 onClick={continuarPago}
-                disabled={placing || !items.length}
+                disabled={placing || !itemsDedup.length}
               >
                 {placing ? "Creando pedido..." : "Continuar al pago"}
               </Button>
