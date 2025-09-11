@@ -1,0 +1,87 @@
+
+.auth-shell{
+  min-height: calc(100vh - 80px);
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(1200px 300px at 50% -50%, rgba(122,210,143,.25), transparent),
+    linear-gradient(180deg, #ffffff, #f0fbf4);
+}
+
+.auth-card{
+  width: 100%;
+  max-width: 1120px;
+  border: none;
+  overflow: hidden;
+  border-radius: 16px;
+  box-shadow: 0 10px 28px rgba(18,82,34,.12);
+}
+
+.auth-aside{
+  position: relative;
+  height: 100%;
+  min-height: 420px;
+  background: linear-gradient(160deg, var(--mc-green-900), var(--mc-green-700));
+  color:#ecffef;
+}
+.auth-aside .brand{
+  display:flex; align-items:center; gap:.6rem;
+}
+.auth-aside .brand img{
+  width:42px; height:42px; object-fit:contain;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.25));
+}
+.auth-aside h3{ margin: 0; color:#fff; }
+.auth-aside .bullets{
+  margin-top: 1rem; opacity:.95;
+}
+.auth-aside .bullets li{ margin:.35rem 0; }
+
+.auth-illustration{
+  position:absolute; inset:auto 0 0 0; text-align:center; opacity:.25;
+}
+.auth-illustration img{ width: 70%; max-width: 380px; }
+
+.input-icon{
+  position: relative;
+}
+.input-icon .bi{
+  position:absolute; left:10px; top:50%; transform:translateY(-50%); opacity:.55;
+}
+.input-icon .form-control{
+  padding-left: 40px;
+}
+.toggle-eye{
+  position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  background:transparent; border:0; opacity:.7;
+}
+
+.btn-primary{
+  background: var(--mc-green-600);
+  border-color: var(--mc-green-600);
+}
+.btn-primary:hover{
+  background: var(--mc-green-700);
+  border-color: var(--mc-green-700);
+}
+
+.section-title{
+  font-weight:700; color: var(--mc-green-900); margin-bottom: .4rem;
+}
+.help-muted{ color:#2b4c34; opacity:.9; }
+
+.dropzone{
+  border:2px dashed rgba(29,138,65,.6);
+  border-radius:12px; padding:12px; background:#f6fbf7;
+}
+.preview-thumb{
+  width: 92px; height: 92px; object-fit: cover;
+  border-radius: 10px; border:1px solid #e7f5ea;
+  box-shadow: 0 4px 12px rgba(18,82,34,.08);
+}
+.preview-row{ display:flex; gap:10px; flex-wrap:wrap; }
+
+.badge-tip{
+  background: var(--mc-amber); color:#2f2a17; border-radius:999px;
+  font-size:.75rem; padding:.2rem .5rem; font-weight:600;
+}

@@ -1,0 +1,63 @@
+:root{
+  --mc-green-900:#0b3d1e;
+  --mc-green-700:#afebc3;
+  --mc-green-600:#41c56d;
+  --mc-green-500:#27a853;
+  --glass: rgba(43, 143, 76, 0.85);
+}
+
+.login-bg {
+  min-height: calc(100vh - 56px);
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--mc-green-900), var(--mc-green-700));
+
+}
+
+.login-panel{
+  width: min(520px, 92vw);
+  color:#fff;
+  background: var(--glass);
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  backdrop-filter: blur(6px);
+  border:1px solid rgba(255,255,255,.2);
+}
+
+.login-panel .brand{
+  font-weight:800; letter-spacing:.5px;
+}
+
+.avatar-circle{
+  width:84px; height:84px; border-radius:50%;
+  display:grid; place-items:center; font-weight:700; font-size:28px;
+  color:#1d3b24; background: #fff;
+  border:3px solid rgba(255,255,255,.65);
+  box-shadow: 0 6px 18px rgba(0,0,0,.2);
+  margin-top:-42px;
+}
+
+.input-icon{
+  position:relative;
+}
+.input-icon .bi, .input-icon .ri{
+  position:absolute; left:12px; top:50%; transform:translateY(-50%);
+  opacity:.85;
+}
+.input-icon input{
+  padding-left:42px;
+}
+
+.btn-google{
+  background:#fff; color:#222; border:1px solid rgba(0,0,0,.1);
+}
+.btn-google:hover{ background:#f7f7f7; }
+.btn-facebook{
+  background:#1877f2; color:#fff; border:1px solid #1877f2;
+}
+.btn-facebook:hover{ filter:brightness(.95); }
+
+.toggle-eye{
+  position:absolute; right:12px; top:50%; transform:translateY(-50%);
+  background:transparent; border:0; color:#666;
+}

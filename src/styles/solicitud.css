@@ -1,0 +1,63 @@
+.guia-box{
+  border:2px dashed rgba(29,138,65,.6);
+  border-radius: 12px;
+  padding: 12px;
+  background: #f6fbf7;
+}
+.guia-box h6{
+  margin:0 0 6px 0; color:#146b31;
+}
+.guia-box .tips{
+  margin: 0; font-size: .9rem; color:#2b4c34;
+}
+.guia-ejemplo{
+  width: 100%; max-width: 240px; border-radius: 10px;
+  border:1px solid #e0f0e5; background:#fff;
+}
+.preview-thumb{
+  width: 90px; height: 90px; object-fit: cover;
+  border-radius: 8px; border:1px solid #e7f5ea;
+  box-shadow: 0 4px 12px rgba(18,82,34,.08);
+}
+.preview-row{ display:flex; gap:10px; flex-wrap:wrap; }
+.cam-wrap{
+  position: relative;
+  width: 100%;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 320px;
+}
+.cam-video{
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: cover;
+}
+.cam-overlay{
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.cam-overlay .frame{
+  width: 82%;
+  aspect-ratio: 16/10; /* por defecto (1.6) */
+  border: 3px dashed rgba(255,255,255,.85);
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.35) inset;
+}
+.cam-overlay.selfie .frame{
+  aspect-ratio: 1 / 1; /* cuadrado para selfie */
+  border-radius: 50%;
+}
+.cam-overlay .tips{
+  position: absolute;
+  bottom: 10px;
+  left: 0; right: 0;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0,0,0,.8);
+  font-weight: 600;
+}

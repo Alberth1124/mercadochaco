@@ -1,0 +1,32 @@
+.of-grid{
+  display:grid; gap:14px;
+}
+
+.of-card{
+  background:#fff; border:1px solid #e7e7e7; border-radius:12px; padding:10px;
+  display:flex; flex-direction:column; gap:10px; height:300px;
+  transition: box-shadow .15s ease, transform .15s ease;
+}
+.of-card:hover{ box-shadow:0 10px 22px rgba(0,0,0,.08); transform:translateY(-2px); }
+
+.of-imgwrap{
+  height:175px; border-radius:10px; background:#f7f7f7; position:relative;
+  display:flex; align-items:center; justify-content:center; overflow:hidden;
+}
+.of-imgwrap img{ max-height:165px; max-width:100%; object-fit:contain; display:block; }
+
+.of-chip{
+  position:absolute; top:8px; right:8px;
+  background:#20c997; color:#fff; border-radius:20px; padding:4px 10px; font-size:.78rem; font-weight:600;
+  box-shadow: 0 2px 6px rgba(0,0,0,.12);
+}
+
+.of-placeholder{ color:#999; font-size:.9rem; }
+
+.of-body{ display:grid; gap:2px; }
+.of-name{ font-weight:700; font-size:1rem; color:#1b1b1b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.of-price{ font-weight:800; color:#198754; font-size:1.05rem; }
+
+.of-actions{ margin-top:auto; display:flex; gap:8px; }
+
+.carousel-item{ padding:6px 0; }
