@@ -44,7 +44,7 @@ export default function NavbarMC(){
             {rol !== "cliente" && (
               <>
                 <Nav.Link as={NavLink} to="/panel/productor" className="link-animate">Panel</Nav.Link>
-                  <Nav.Link as={NavLink} to="/productor/pedidos" className="link-animate">Pedidos</Nav.Link>
+                  <Nav.Link as={NavLink} to="/productor/pedidos" className="link-animate">Pedidos Clientes</Nav.Link>
                 <Nav.Link as={NavLink} to="/mis-productos" className="link-animate">Mis productos</Nav.Link>
                 <Nav.Link as={NavLink} to="/reportes" className="link-animate">Reportes</Nav.Link>
               
@@ -53,10 +53,8 @@ export default function NavbarMC(){
 
             {rol === "admin" && (
               <>
-                <Nav.Link as={NavLink} to="/admin/solicitudes" className="link-animate">Solicitudes</Nav.Link>
-                <Nav.Link as={NavLink} to="/admin/pedidos" className="link-animate">Pedidos</Nav.Link>
                 <Nav.Link as={NavLink} to="/admin/categorias" className="link-animate">Categorías</Nav.Link>
-                <Nav.Link as={NavLink} to="/admin/usuarios" className="link-animate">Usuarios</Nav.Link>
+               
               </>
             )}
           </Nav>
@@ -114,8 +112,7 @@ export default function NavbarMC(){
                   <>
                     <NavDropdown.Divider />
                     <NavDropdown.Item as={NavLink} to="/admin/solicitudes">Admin — Solicitudes</NavDropdown.Item>
-                    <NavDropdown.Item as={NavLink} to="/admin/pedidos">Admin — Pedidos</NavDropdown.Item>
-                    <NavDropdown.Item as={NavLink} to="/admin/categorias">Admin — Categorías</NavDropdown.Item>
+                    <NavDropdown.Item as={NavLink} to="/admin/pedidos">Admin — Validacion Qr</NavDropdown.Item>
                     <NavDropdown.Item as={NavLink} to="/admin/usuarios">Admin — Usuarios</NavDropdown.Item>
                   </>
                 )}

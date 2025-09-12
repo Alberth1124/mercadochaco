@@ -23,7 +23,7 @@ export default function Pedidos(){
 
   return (
     <div className="container py-3">
-      <h4>Pedidos (Productor)</h4>
+      <h4>Pedidos</h4>
       {err && <Alert variant="danger">{err}</Alert>}
       {loading ? <div className="text-center py-5"><Spinner animation="border"/></div> :
       <Table responsive bordered hover className="mt-3">

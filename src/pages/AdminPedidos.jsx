@@ -24,14 +24,12 @@ export default function AdminPedidos(){
     estado === 'pendiente' ? 'warning' :
     'secondary';
 
-  // Cambiar estado (genérico)
   const cambiar = async (pedido_id, estado)=>{
     setErr(null);
     const { error } = await supabase.rpc('admin_cambiar_estado_pedido', { p_pedido: pedido_id, p_estado: estado });
     if (error) setErr(error.message); else await cargar();
   };
 
-  // Confirmar pago (usa tu función nueva)
   const marcarPagado = async (pedido_id)=>{
     setErr(null);
     const { error } = await supabase.rpc('admin_confirma_pago', { p_pedido: pedido_id });
@@ -39,10 +37,9 @@ export default function AdminPedidos(){
     await cargar();
   };
 
-  // === Agrupar por pedido ===
+  // === Agrupar por pedido (mantenemos total_qr calculado pero NO lo mostramos) ===
   const pedidosMap = new Map();
   for (const r of rows) {
-    // detectar "monto QR" si existe en la vista (nombres comunes)
     const montoQR = Number(
       r.qr_monto ?? r.monto_qr ?? r.sip_monto ?? r.monto ?? r.total ?? 0
     );
@@ -50,16 +47,14 @@ export default function AdminPedidos(){
     if (!pedidosMap.has(r.pedido_id)) {
       pedidosMap.set(r.pedido_id, {
         pedido_id: r.pedido_id,
-        // cliente_email: r.cliente_email,    // ← removido del render
         estado: r.estado,
         creado_en: r.creado_en,
-        total_qr: montoQR, // mostramos esto como “Total (QR)”
+        total_qr: montoQR, // calculado pero NO renderizado
         items: []
       });
     }
     const p = pedidosMap.get(r.pedido_id);
     p.items.push(r);
-    // si por algún motivo en otras filas viene un total_qr válido, lo actualizamos
     if (montoQR && !Number.isNaN(montoQR)) p.total_qr = montoQR;
   }
   const pedidos = Array.from(pedidosMap.values());
@@ -80,12 +75,11 @@ export default function AdminPedidos(){
       ) : (
         <Table responsive bordered hover size="sm" className="mt-3">
           <thead>
-            {/* Quitamos la columna Cliente */}
+            {/* ⬇️ Quitamos la columna "Total (QR)" */}
             <tr>
               <th>Fecha</th>
               <th>Pedido</th>
               <th>Estado</th>
-              <th>Total (QR)</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -97,9 +91,7 @@ export default function AdminPedidos(){
                   <td>{new Date(p.creado_en).toLocaleString()}</td>
                   <td>{p.pedido_id}</td>
                   <td><Badge bg={color(p.estado)}>{p.estado}</Badge></td>
-                  <td>Bs {Number(p.total_qr || 0).toFixed(2)}</td>
                   <td className="d-flex gap-2 flex-wrap">
-                    {/* Nuevo flujo: confirmar pago */}
                     <Button
                       size="sm"
                       variant="success"
@@ -108,8 +100,6 @@ export default function AdminPedidos(){
                     >
                       Marcar pagado
                     </Button>
-
-                    {/* Flujos existentes */}
                     <Button
                       size="sm"
                       variant="outline-secondary"
@@ -129,16 +119,16 @@ export default function AdminPedidos(){
                   </td>
                 </tr>
 
-                {/* Detalle de items (se mantiene). Si quieres ocultarlo, borra este bloque */}
+                {/* Detalle: ⬇️ solo mostramos Producto y Cant., ocultamos PU y Subtotal */}
                 <tr>
-                  <td colSpan={5} className="p-0">
+                  {/* colSpan ajustado de 5 → 4 por quitar "Total (QR)" */}
+                  <td colSpan={4} className="p-0">
                     <Table size="sm" bordered className="mb-0">
                       <thead>
                         <tr>
-                          <th style={{width:'40%'}}>Producto</th>
+                          <th style={{width:'60%'}}>Producto</th>
                           <th>Cant.</th>
-                          <th>PU</th>
-                          <th>Subtotal</th>
+                          {/* PU / Subtotal ocultos */}
                         </tr>
                       </thead>
                       <tbody>
@@ -146,8 +136,7 @@ export default function AdminPedidos(){
                           <tr key={`${p.pedido_id}-${it.producto_id}`}>
                             <td>{it.producto_nombre}</td>
                             <td>{it.cantidad}</td>
-                            <td>Bs {Number(it.precio_unit).toFixed(2)}</td>
-                            <td>Bs {(Number(it.cantidad)*Number(it.precio_unit)).toFixed(2)}</td>
+                            {/* PU/Subtotal no renderizados */}
                           </tr>
                         ))}
                       </tbody>
@@ -158,7 +147,8 @@ export default function AdminPedidos(){
             ))}
             {pedidos.length===0 && (
               <tr>
-                <td colSpan={5} className="text-center text-muted">Sin pedidos</td>
+                {/* colSpan ajustado de 5 → 4 */}
+                <td colSpan={4} className="text-center text-muted">Sin pedidos</td>
               </tr>
             )}
           </tbody>
