@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { invokeOrFetch } from '../lib/functions';
 import { showToast } from '../utils/toast';
+import { useCart } from "../context/CartContext";
 
 export default function Checkout(){
   const { pedidoId } = useParams();
@@ -10,6 +11,13 @@ export default function Checkout(){
   const [venc, setVenc] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // limpiar carrito de forma segura
+  const { clear: clearCart } = useCart(); // sin optional chaining aquí; el contexto debe existir
+  const clearCartSafe = () => {
+    try { clearCart?.(); } catch {}
+    try { localStorage.removeItem('mc_cart'); } catch {}
+  };
 
   // Exigir sesión
   useEffect(() => {
@@ -36,6 +44,7 @@ export default function Checkout(){
     if (error || !data) throw new Error('Pedido inválido');
 
     if (data.estado === 'pagado') {
+      clearCartSafe(); // 🔹 limpia carrito si ya estaba pagado
       navigate(`/entrega/${pedidoId}`, { replace:true });
       throw new Error('Pedido ya pagado');
     }
@@ -82,6 +91,7 @@ export default function Checkout(){
         .maybeSingle();
 
       if (!error && row?.estado === 'confirmado') {
+        clearCartSafe(); // 🔹 limpia carrito
         showToast({ title: '¡Pago confirmado!', body: 'Ahora completa los datos de entrega.', variant: 'success' });
         navigate(`/entrega/${pedidoId}`, { replace:true });
         return;
@@ -107,6 +117,7 @@ export default function Checkout(){
       }, (payload) => {
         const estado = payload?.new?.estado || payload?.old?.estado;
         if (estado === 'confirmado') {
+          clearCartSafe(); // 🔹 limpia carrito
           showToast({ title: '¡Pago confirmado!', body: 'Ahora completa los datos de entrega.', variant: 'success' });
           navigate(`/entrega/${pedidoId}`, { replace:true });
         }
@@ -126,10 +137,11 @@ export default function Checkout(){
         <>
           <img src={img} alt="QR SIP" style={{ maxWidth: 260 }} />
           {venc && <p className="text-muted mt-2">Vence: {venc}</p>}
-          <div className="mt-3">
+          <div className="mt-3 d-flex gap-2">
             <button className="btn btn-outline-secondary btn-sm" onClick={generarQR} disabled={loading}>
               Reemitir QR
             </button>
+            {/* Si agregaste el fallback "Revisar estado en SIP", el botón puede ir aquí */}
           </div>
         </>
       )}
