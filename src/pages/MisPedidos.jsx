@@ -21,7 +21,7 @@ export default function MisPedidos() {
       const { data, error } = await supabase
         .from("v_pedidos_detalle")
         .select("*")
-        .eq("cliente_id", user.id)
+        .eq("usuario_id", user.id)
         .order("creado_en", { ascending: false });
       if (error) setErr(error.message); else setRows(data || []);
       setLoading(false);
@@ -74,8 +74,8 @@ export default function MisPedidos() {
                 <td>{r.pedido_id.slice(0, 8)}…</td>
                 <td>{r.producto_nombre}</td>
                 <td>{r.cantidad}</td>
-                <td>Bs {Number(r.precio_unit ?? 0).toFixed(2)}</td>
-                <td>Bs {(Number(r.cantidad) * Number(r.precio_unit ?? 0)).toFixed(2)}</td>
+                <td>Bs {Number(r.precio_unitario).toFixed(2)}</td>
+                <td>Bs {Number(r.subtotal).toFixed(2)}</td>
                 <td><Badge bg={color(r.estado)}>{r.estado}</Badge></td>
                 <td>
                   {r.estado === "pagado"

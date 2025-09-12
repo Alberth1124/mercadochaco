@@ -44,8 +44,10 @@ export default function NavbarMC(){
             {rol !== "cliente" && (
               <>
                 <Nav.Link as={NavLink} to="/panel/productor" className="link-animate">Panel</Nav.Link>
+                  <Nav.Link as={NavLink} to="/productor/pedidos" className="link-animate">Pedidos</Nav.Link>
                 <Nav.Link as={NavLink} to="/mis-productos" className="link-animate">Mis productos</Nav.Link>
                 <Nav.Link as={NavLink} to="/reportes" className="link-animate">Reportes</Nav.Link>
+              
               </>
             )}
 
