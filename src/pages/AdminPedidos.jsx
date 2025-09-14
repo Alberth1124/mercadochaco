@@ -28,7 +28,7 @@ export default function AdminPedidos(){
   const marcarPagado = async (pedido_id)=>{
     setErr(null); setAct({ id: pedido_id, op: 'pagado' });
     try{
-      const { error } = await supabase.rpc('admin_confirma_pago', { p_pedido: pedido_id });
+       const { error } = await supabase.rpc('admin_confirma_pago_fix', { p_pedido: pedido_id });
       if (error) throw error;
       await cargar();
     }catch(e){ setErr(e.message||String(e)); }
@@ -38,7 +38,7 @@ export default function AdminPedidos(){
   const cambiar = async (pedido_id, estado)=>{
     setErr(null); setAct({ id: pedido_id, op: estado });
     try{
-      const { error } = await supabase.rpc('admin_set_estado_simple', { p_pedido: pedido_id, p_estado: estado });
+      const { error } = await supabase.rpc('admin_set_estado_simple_fix', { p_pedido: pedido_id, p_estado: estado });
       if (error) throw error;
       await cargar();
     }catch(e){ setErr(e.message||String(e)); }

@@ -66,7 +66,7 @@ export default function ProductoDetalle() {
 
   const wa = waHrefFromPhoneBO(
     p.productor_telefono,
-    `Hola, me interesa: ${p.nombre}. ¿Precio y entrega?`
+    `Hola, me interesa: ${p.nombre}. ¿Información de entrega?`
   );
 
   const catName = p?.categoria_nombre ?? null;
