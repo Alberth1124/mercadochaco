@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { invokeOrFetch } from '../lib/functions';
 import { showToast } from '../utils/toast';
 import { useCart } from "../context/CartContext";
 
@@ -64,21 +63,16 @@ export default function Checkout(){
     return Number(data.total || 0);
   }
 
-  // Genera/Reemite QR
+  // Genera/Reemite QR — usando SDK de Supabase (sin helper)
   async function generarQR(){
     setLoading(true);
     try{
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Sesión no válida. Inicia sesión nuevamente.');
-      const token = session.access_token;
-
       const monto = await getMontoPedido();
 
-      const data = await invokeOrFetch('sip-genera-qr', {
-        pedido_id: pedidoId,
-        monto,
-        glosa: `Pedido ${pedidoId}`
-      }, { token });
+      const { data, error } = await supabase.functions.invoke('sip-genera-qr', {
+        body: { pedido_id: pedidoId, monto, glosa: `Pedido ${pedidoId}` },
+      });
+      if (error) throw new Error(error.message || JSON.stringify(error));
 
       if (!data?.base64) throw new Error('No se recibió imagen de QR');
       setImg(`data:image/png;base64,${data.base64}`);
