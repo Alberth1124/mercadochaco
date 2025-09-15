@@ -105,7 +105,7 @@ export default function AdminUsuarios(){
       </div>
 
       <p className="text-muted mt-3" style={{fontSize:'.9rem'}}>
-        Nota: Las contraseñas no son accesibles (Supabase almacena <i>hashes</i> irreversibles).
+        Nota: Las contraseñas no son accesibles (La base de datos almacena <i>hashes</i> irreversibles).
       </p>
     </div>
   );
