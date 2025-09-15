@@ -12,11 +12,9 @@ export default function Checkout(){
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  // evita doble navegación/limpieza
   const doneRef = useRef(false);
 
-  // limpiar carrito de forma segura
-  const { clear: clearCart } = useCart(); // el contexto debe existir
+  const { clear: clearCart } = useCart();
   const clearCartSafe = () => {
     try { clearCart?.(); } catch {}
     try { localStorage.removeItem('mc_cart'); } catch {}
@@ -30,7 +28,6 @@ export default function Checkout(){
     navigate(`/entrega/${pedidoId}`, { replace:true });
   };
 
-  // Exigir sesión
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -44,7 +41,6 @@ export default function Checkout(){
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Obtiene total y valida estado del pedido
   async function getMontoPedido(){
     const { data, error } = await supabase
       .from('pedidos')
@@ -63,14 +59,19 @@ export default function Checkout(){
     return Number(data.total || 0);
   }
 
-  // Genera/Reemite QR — usando SDK de Supabase (sin helper)
+  // ✅ Genera/Reemite QR — usando SDK de Supabase
   async function generarQR(){
+    if (!pedidoId) {
+      alert('Falta pedidoId en la ruta /checkout/:pedidoId');
+      return;
+    }
+
     setLoading(true);
     try{
       const monto = await getMontoPedido();
 
       const { data, error } = await supabase.functions.invoke('sip-genera-qr', {
-        body: { pedido_id: pedidoId, monto, glosa: `Pedido ${pedidoId}` },
+        body: { pedido_id: pedidoId, monto, glosa: `Pedido ${pedidoId}` }, // <-- aquí estaba el bug
       });
       if (error) throw new Error(error.message || JSON.stringify(error));
 
@@ -85,12 +86,10 @@ export default function Checkout(){
     }
   }
 
-  // A) Chequeo inicial pagos_sip (por si ya estaba confirmado) + emitir QR
   useEffect(() => {
     (async () => {
       if (!pedidoId) return;
 
-      // si ya está pagado (por seguridad extra)
       const { data: ped } = await supabase
         .from('pedidos')
         .select('estado')
@@ -101,7 +100,6 @@ export default function Checkout(){
         return;
       }
 
-      // chequear pagos_sip
       const { data: row } = await supabase
         .from('pagos_sip')
         .select('estado')
@@ -113,13 +111,11 @@ export default function Checkout(){
         return;
       }
 
-      // Si no estaba confirmado, genera (o reemite) el QR
       await generarQR();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoId]);
 
-  // B1) Realtime: pagos_sip → confirmado => redirigir
   useEffect(() => {
     if (!pedidoId) return;
 
@@ -142,7 +138,6 @@ export default function Checkout(){
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoId]);
 
-  // B2) Realtime adicional: pedidos → pagado (por si el callback marca directo el pedido)
   useEffect(() => {
     if (!pedidoId) return;
 
@@ -164,7 +159,6 @@ export default function Checkout(){
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoId]);
 
-  // C) Fallback polling cada 3s (invisible para el cliente)
   useEffect(() => {
     if (!pedidoId) return;
     const i = setInterval(async () => {
@@ -196,7 +190,6 @@ export default function Checkout(){
             <button className="btn btn-outline-secondary btn-sm" onClick={generarQR} disabled={loading}>
               Reemitir QR
             </button>
-            {/* Si agregas el botón "Revisar estado en SIP", colócalo aquí (no afecta la vista actual) */}
           </div>
         </>
       )}

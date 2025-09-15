@@ -1,21 +1,15 @@
-// src/supabaseClient.ts (o .js)
 import { createClient } from '@supabase/supabase-js';
 
-const rawUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
-const supabaseUrl = rawUrl ? rawUrl.replace(/\/+$/, '') : '';
-const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+const url = (import.meta.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '');
+const key = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
-// 👇 Usa dominio de Functions si lo defines; si no, fallback seguro
-const rawFns = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL?.trim();
-export const functionsUrl =
-  (rawFns && rawFns.replace(/\/+$/, '')) ||
-  (supabaseUrl ? `${supabaseUrl}/functions/v1` : '');
+const fromEnv = (import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || '').replace(/\/+$/, '');
+const projectRef = url.replace(/^https?:\/\//, '').split('.')[0];
+export const FUNCTIONS_BASE = fromEnv || `https://${projectRef}.functions.supabase.co`;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('[Supabase] Faltan VITE_SUPABASE_URL y/o VITE_SUPABASE_ANON_KEY');
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(url, key, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
-  functions: { url: functionsUrl }, // <- CLAVE
+  functions: { url: FUNCTIONS_BASE }, // 👈 clave
 });
+// Exporta por si alguna vez haces fetch manual (no necesario con .invoke)
+export { FUNCTIONS_BASE };
