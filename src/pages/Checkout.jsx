@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+// src/pages/Checkout.jsx
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { invokeOrFetch } from '../lib/functions';
@@ -12,11 +13,22 @@ export default function Checkout(){
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  // evita doble navegación/limpieza
+  const doneRef = useRef(false);
+
   // limpiar carrito de forma segura
-  const { clear: clearCart } = useCart(); // sin optional chaining aquí; el contexto debe existir
+  const { clear: clearCart } = useCart(); // el contexto debe existir
   const clearCartSafe = () => {
     try { clearCart?.(); } catch {}
     try { localStorage.removeItem('mc_cart'); } catch {}
+  };
+
+  const goEntregaOnce = () => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    clearCartSafe();
+    showToast({ title: '¡Pago confirmado!', body: 'Ahora completa los datos de entrega.', variant: 'success' });
+    navigate(`/entrega/${pedidoId}`, { replace:true });
   };
 
   // Exigir sesión
@@ -44,8 +56,7 @@ export default function Checkout(){
     if (error || !data) throw new Error('Pedido inválido');
 
     if (data.estado === 'pagado') {
-      clearCartSafe(); // 🔹 limpia carrito si ya estaba pagado
-      navigate(`/entrega/${pedidoId}`, { replace:true });
+      goEntregaOnce();
       throw new Error('Pedido ya pagado');
     }
     if (data.estado !== 'pendiente') throw new Error('El pedido no está pendiente');
@@ -80,20 +91,31 @@ export default function Checkout(){
     }
   }
 
-  // 🔎 A) Chequeo inicial por si el pago ya está confirmado
+  // A) Chequeo inicial pagos_sip (por si ya estaba confirmado) + emitir QR
   useEffect(() => {
     (async () => {
       if (!pedidoId) return;
-      const { data: row, error } = await supabase
+
+      // si ya está pagado (por seguridad extra)
+      const { data: ped } = await supabase
+        .from('pedidos')
+        .select('estado')
+        .eq('id', pedidoId)
+        .maybeSingle();
+      if (ped?.estado === 'pagado') {
+        goEntregaOnce();
+        return;
+      }
+
+      // chequear pagos_sip
+      const { data: row } = await supabase
         .from('pagos_sip')
         .select('estado')
         .eq('pedido_id', pedidoId)
         .maybeSingle();
 
-      if (!error && row?.estado === 'confirmado') {
-        clearCartSafe(); // 🔹 limpia carrito
-        showToast({ title: '¡Pago confirmado!', body: 'Ahora completa los datos de entrega.', variant: 'success' });
-        navigate(`/entrega/${pedidoId}`, { replace:true });
+      if (row?.estado === 'confirmado') {
+        goEntregaOnce();
         return;
       }
 
@@ -103,29 +125,68 @@ export default function Checkout(){
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoId]);
 
-  // 🔔 B) Realtime: si cambia pagos_sip → confirmado => redirigir
+  // B1) Realtime: pagos_sip → confirmado => redirigir
   useEffect(() => {
     if (!pedidoId) return;
 
-    const channel = supabase
+    const ch = supabase
       .channel(`pago_${pedidoId}`)
       .on('postgres_changes', {
-        event: '*',                // escucha INSERT y UPDATE
+        event: '*',
         schema: 'public',
         table: 'pagos_sip',
         filter: `pedido_id=eq.${pedidoId}`
       }, (payload) => {
         const estado = payload?.new?.estado || payload?.old?.estado;
         if (estado === 'confirmado') {
-          clearCartSafe(); // 🔹 limpia carrito
-          showToast({ title: '¡Pago confirmado!', body: 'Ahora completa los datos de entrega.', variant: 'success' });
-          navigate(`/entrega/${pedidoId}`, { replace:true });
+          goEntregaOnce();
         }
       })
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
-  }, [pedidoId, navigate]);
+    return () => supabase.removeChannel(ch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidoId]);
+
+  // B2) Realtime adicional: pedidos → pagado (por si el callback marca directo el pedido)
+  useEffect(() => {
+    if (!pedidoId) return;
+
+    const ch = supabase
+      .channel(`pedido_${pedidoId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'pedidos',
+        filter: `id=eq.${pedidoId}`
+      }, (payload) => {
+        if (payload?.new?.estado === 'pagado') {
+          goEntregaOnce();
+        }
+      })
+      .subscribe();
+
+    return () => supabase.removeChannel(ch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidoId]);
+
+  // C) Fallback polling cada 3s (invisible para el cliente)
+  useEffect(() => {
+    if (!pedidoId) return;
+    const i = setInterval(async () => {
+      if (doneRef.current) return;
+      const { data } = await supabase
+        .from('pedidos')
+        .select('estado')
+        .eq('id', pedidoId)
+        .maybeSingle();
+      if (data?.estado === 'pagado') {
+        goEntregaOnce();
+      }
+    }, 3000);
+    return () => clearInterval(i);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedidoId]);
 
   return (
     <div className="container py-4">
@@ -141,7 +202,7 @@ export default function Checkout(){
             <button className="btn btn-outline-secondary btn-sm" onClick={generarQR} disabled={loading}>
               Reemitir QR
             </button>
-            {/* Si agregaste el fallback "Revisar estado en SIP", el botón puede ir aquí */}
+            {/* Si agregas el botón "Revisar estado en SIP", colócalo aquí (no afecta la vista actual) */}
           </div>
         </>
       )}
