@@ -10,10 +10,11 @@ export default function Checkout(){
   const [img, setImg]   = useState(null);
   const [venc, setVenc] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(false);
   const navigate = useNavigate();
-
   const doneRef = useRef(false);
 
+  // limpiar carrito
   const { clear: clearCart } = useCart();
   const clearCartSafe = () => {
     try { clearCart?.(); } catch {}
@@ -28,6 +29,7 @@ export default function Checkout(){
     navigate(`/entrega/${pedidoId}`, { replace:true });
   };
 
+  // exigir sesión
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -59,19 +61,18 @@ export default function Checkout(){
     return Number(data.total || 0);
   }
 
-  // ✅ Genera/Reemite QR — usando SDK de Supabase
+  // generar/reenviar QR
   async function generarQR(){
     if (!pedidoId) {
       alert('Falta pedidoId en la ruta /checkout/:pedidoId');
       return;
     }
-
     setLoading(true);
     try{
       const monto = await getMontoPedido();
 
       const { data, error } = await supabase.functions.invoke('sip-genera-qr', {
-        body: { pedido_id: pedidoId, monto, glosa: `Pedido ${pedidoId}` }, // <-- aquí estaba el bug
+        body: { pedido_id: pedidoId, monto, glosa: `Pedido ${pedidoId}` },
       });
       if (error) throw new Error(error.message || JSON.stringify(error));
 
@@ -86,6 +87,30 @@ export default function Checkout(){
     }
   }
 
+  // botón “Revisar estado en SIP”
+  async function revisarEstadoSIP(){
+    if (!pedidoId) return;
+    setChecking(true);
+    try{
+      const { data, error } = await supabase.functions.invoke('sip-estado', {
+        body: { pedido_id: pedidoId, apply: true } // apply=true: si está confirmado, marca pagado
+      });
+      if (error) throw new Error(error.message || JSON.stringify(error));
+
+      const estado = String(data?.estado || '').toLowerCase();
+      if (data?.applied || estado === 'pagado' || estado === 'confirmado') {
+        goEntregaOnce();
+      } else {
+        alert(`Estado actual: ${data?.estado ?? 'desconocido'}`);
+      }
+    } catch(e){
+      alert(e?.message || 'No se pudo consultar el estado');
+    } finally{
+      setChecking(false);
+    }
+  }
+
+  // chequeo inicial + emitir QR
   useEffect(() => {
     (async () => {
       if (!pedidoId) return;
@@ -95,10 +120,7 @@ export default function Checkout(){
         .select('estado')
         .eq('id', pedidoId)
         .maybeSingle();
-      if (ped?.estado === 'pagado') {
-        goEntregaOnce();
-        return;
-      }
+      if (ped?.estado === 'pagado') { goEntregaOnce(); return; }
 
       const { data: row } = await supabase
         .from('pagos_sip')
@@ -106,16 +128,14 @@ export default function Checkout(){
         .eq('pedido_id', pedidoId)
         .maybeSingle();
 
-      if (row?.estado === 'confirmado') {
-        goEntregaOnce();
-        return;
-      }
+      if (row?.estado === 'confirmado') { goEntregaOnce(); return; }
 
       await generarQR();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoId]);
 
+  // realtime pagos_sip
   useEffect(() => {
     if (!pedidoId) return;
 
@@ -128,9 +148,7 @@ export default function Checkout(){
         filter: `pedido_id=eq.${pedidoId}`
       }, (payload) => {
         const estado = payload?.new?.estado || payload?.old?.estado;
-        if (estado === 'confirmado') {
-          goEntregaOnce();
-        }
+        if (estado === 'confirmado') goEntregaOnce();
       })
       .subscribe();
 
@@ -138,6 +156,7 @@ export default function Checkout(){
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoId]);
 
+  // realtime pedidos → pagado
   useEffect(() => {
     if (!pedidoId) return;
 
@@ -149,9 +168,7 @@ export default function Checkout(){
         table: 'pedidos',
         filter: `id=eq.${pedidoId}`
       }, (payload) => {
-        if (payload?.new?.estado === 'pagado') {
-          goEntregaOnce();
-        }
+        if (payload?.new?.estado === 'pagado') goEntregaOnce();
       })
       .subscribe();
 
@@ -159,6 +176,7 @@ export default function Checkout(){
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoId]);
 
+  // fallback polling
   useEffect(() => {
     if (!pedidoId) return;
     const i = setInterval(async () => {
@@ -168,9 +186,7 @@ export default function Checkout(){
         .select('estado')
         .eq('id', pedidoId)
         .maybeSingle();
-      if (data?.estado === 'pagado') {
-        goEntregaOnce();
-      }
+      if (data?.estado === 'pagado') goEntregaOnce();
     }, 3000);
     return () => clearInterval(i);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,6 +205,9 @@ export default function Checkout(){
           <div className="mt-3 d-flex gap-2">
             <button className="btn btn-outline-secondary btn-sm" onClick={generarQR} disabled={loading}>
               Reemitir QR
+            </button>
+            <button className="btn btn-outline-primary btn-sm" onClick={revisarEstadoSIP} disabled={checking}>
+              {checking ? 'Revisando…' : 'Revisar estado en SIP'}
             </button>
           </div>
         </>
