@@ -5,14 +5,19 @@ import { supabase } from '../supabaseClient';
 import { showToast } from '../utils/toast';
 import { useCart } from "../context/CartContext";
 
-export default function Checkout(){
+export default function Checkout() {
   const { pedidoId } = useParams();
-  const [img, setImg]   = useState(null);
+  const navigate = useNavigate();
+
+  const [img, setImg] = useState(null);
   const [venc, setVenc] = useState(null);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
-  const navigate = useNavigate();
-  const doneRef = useRef(false);
+
+  // locks/flags
+  const doneRef = useRef(false);     // navegación una sola vez
+  const genLock = useRef(false);     // anti doble generación (click/StrictMode)
+  const initLock = useRef(false);    // anti doble init por StrictMode
 
   // limpiar carrito
   const { clear: clearCart } = useCart();
@@ -26,7 +31,7 @@ export default function Checkout(){
     doneRef.current = true;
     clearCartSafe();
     showToast({ title: '¡Pago confirmado!', body: 'Ahora completa los datos de entrega.', variant: 'success' });
-    navigate(`/entrega/${pedidoId}`, { replace:true });
+    navigate(`/entrega/${pedidoId}`, { replace: true });
   };
 
   // exigir sesión
@@ -43,7 +48,7 @@ export default function Checkout(){
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function getMontoPedido(){
+  async function getMontoPedido() {
     const { data, error } = await supabase
       .from('pedidos')
       .select('total, estado')
@@ -61,14 +66,17 @@ export default function Checkout(){
     return Number(data.total || 0);
   }
 
-  // generar/reenviar QR
-  async function generarQR(){
+  // generar/reenviar QR (idempotente en server; con lock en cliente)
+  async function generarQR() {
     if (!pedidoId) {
-      alert('Falta pedidoId en la ruta /checkout/:pedidoId');
+      showToast({ title: 'Error', body: 'Falta pedidoId en la ruta /checkout/:pedidoId', variant: 'danger' });
       return;
     }
+    if (genLock.current) return;
+    genLock.current = true;
     setLoading(true);
-    try{
+
+    try {
       const monto = await getMontoPedido();
 
       const { data, error } = await supabase.functions.invoke('sip-genera-qr', {
@@ -76,24 +84,33 @@ export default function Checkout(){
       });
       if (error) throw new Error(error.message || JSON.stringify(error));
 
-      if (!data?.base64) throw new Error('No se recibió imagen de QR');
-      setImg(`data:image/png;base64,${data.base64}`);
-      setVenc(data.expira || null);
-    } catch (e){
+      // Soporte a 2 formatos de respuesta
+      const b64 = data?.base64 || data?.objeto?.imagenQr;
+      const expir = data?.expira || data?.objeto?.fechaVencimiento || null;
+
+      if (!b64) throw new Error('No se recibió imagen de QR');
+      setImg(`data:image/png;base64,${b64}`);
+      setVenc(expir);
+      showToast({ title: 'QR listo', body: 'Escanéalo con tu app bancaria.', variant: 'info' });
+    } catch (e) {
       const msg = e?.message || 'No se pudo generar el QR';
-      if (!/ya pagado/i.test(msg)) alert(msg);
+      if (!/ya pagado/i.test(msg)) {
+        showToast({ title: 'Error', body: msg, variant: 'danger' });
+      }
     } finally {
       setLoading(false);
+      // liberar el lock con leve delay para evitar rebotes de render
+      setTimeout(() => { genLock.current = false; }, 300);
     }
   }
 
   // botón “Revisar estado en SIP”
-  async function revisarEstadoSIP(){
+  async function revisarEstadoSIP() {
     if (!pedidoId) return;
     setChecking(true);
-    try{
+    try {
       const { data, error } = await supabase.functions.invoke('sip-estado', {
-        body: { pedido_id: pedidoId, apply: true } // apply=true: si está confirmado, marca pagado
+        body: { pedido_id: pedidoId, apply: true } // el server sincroniza si ya está PAGADO
       });
       if (error) throw new Error(error.message || JSON.stringify(error));
 
@@ -101,20 +118,22 @@ export default function Checkout(){
       if (data?.applied || estado === 'pagado' || estado === 'confirmado') {
         goEntregaOnce();
       } else {
-        alert(`Estado actual: ${data?.estado ?? 'desconocido'}`);
+        showToast({ title: 'Estado', body: `Actual: ${data?.estado ?? 'desconocido'}`, variant: 'secondary' });
       }
-    } catch(e){
-      alert(e?.message || 'No se pudo consultar el estado');
-    } finally{
+    } catch (e) {
+      showToast({ title: 'Error', body: e?.message || 'No se pudo consultar el estado', variant: 'danger' });
+    } finally {
       setChecking(false);
     }
   }
 
-  // chequeo inicial + emitir QR
+  // INIT: reusar QR si hay uno pendiente; si no, generar uno.
   useEffect(() => {
     (async () => {
-      if (!pedidoId) return;
+      if (!pedidoId || initLock.current) return;
+      initLock.current = true; // evita doble ejecución por StrictMode
 
+      // 1) si el pedido ya está pagado → navegar
       const { data: ped } = await supabase
         .from('pedidos')
         .select('estado')
@@ -122,14 +141,26 @@ export default function Checkout(){
         .maybeSingle();
       if (ped?.estado === 'pagado') { goEntregaOnce(); return; }
 
+      // 2) buscar el último pago del pedido
       const { data: row } = await supabase
         .from('pagos_sip')
-        .select('estado')
+        .select('estado, imagen_qr_base64, expira')
         .eq('pedido_id', pedidoId)
+        .order('creado_en', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
+      // 2a) si hay QR pendiente → reusarlo (NO generes otro)
+      if (row?.estado === 'pendiente' && row?.imagen_qr_base64) {
+        setImg(`data:image/png;base64,${row.imagen_qr_base64}`);
+        setVenc(row.expira || null);
+        return;
+      }
+
+      // 2b) si ya está confirmado → navegar
       if (row?.estado === 'confirmado') { goEntregaOnce(); return; }
 
+      // 3) si no había nada útil → generar uno nuevo
       await generarQR();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -148,6 +179,10 @@ export default function Checkout(){
         filter: `pedido_id=eq.${pedidoId}`
       }, (payload) => {
         const estado = payload?.new?.estado || payload?.old?.estado;
+        const row = payload?.new;
+        if (row?.imagen_qr_base64 && !img) {
+          setImg(`data:image/png;base64,${row.imagen_qr_base64}`);
+        }
         if (estado === 'confirmado') goEntregaOnce();
       })
       .subscribe();
@@ -176,9 +211,10 @@ export default function Checkout(){
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoId]);
 
-  // fallback polling
+  // fallback polling (bajo costo)
   useEffect(() => {
     if (!pedidoId) return;
+    const ms = Number(import.meta.env.VITE_CHECKOUT_POLL_MS || 8000);
     const i = setInterval(async () => {
       if (doneRef.current) return;
       const { data } = await supabase
@@ -187,7 +223,7 @@ export default function Checkout(){
         .eq('id', pedidoId)
         .maybeSingle();
       if (data?.estado === 'pagado') goEntregaOnce();
-    }, 3000);
+    }, ms);
     return () => clearInterval(i);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pedidoId]);
@@ -203,14 +239,30 @@ export default function Checkout(){
           <img src={img} alt="QR SIP" style={{ maxWidth: 260 }} />
           {venc && <p className="text-muted mt-2">Vence: {venc}</p>}
           <div className="mt-3 d-flex gap-2">
-            <button className="btn btn-outline-secondary btn-sm" onClick={generarQR} disabled={loading}>
+            <button
+              className="btn btn-outline-secondary btn-sm"
+              onClick={generarQR}
+              disabled={loading}
+            >
               Reemitir QR
             </button>
-            <button className="btn btn-outline-primary btn-sm" onClick={revisarEstadoSIP} disabled={checking}>
+            <button
+              className="btn btn-outline-primary btn-sm"
+              onClick={revisarEstadoSIP}
+              disabled={checking}
+            >
               {checking ? 'Revisando…' : 'Revisar estado en SIP'}
             </button>
           </div>
         </>
+      )}
+
+      {!loading && !img && (
+        <div className="mt-3">
+          <button className="btn btn-primary btn-sm" onClick={generarQR} disabled={loading}>
+            Generar QR
+          </button>
+        </div>
       )}
     </div>
   );

@@ -1,34 +1,37 @@
-// src/lib/functions.js
-import { supabase, FUNCTIONS_BASE } from '../supabaseClient';
+// src/supabaseClient.js
+import { createClient } from '@supabase/supabase-js';
 
-export async function invokeOrFetch(name, body, options = {}) {
-  // 1) Intento con invoke (la SDK adjunta el JWT si hay sesión)
-  try {
-    const { data, error } = await supabase.functions.invoke(name, {
-      body,
-      // headers opcionales que necesites, pero NO pongas Authorization aquí
-      headers: { ...(options.headers || {}) },
-    });
-    if (error) throw error;
-    return data;
-  } catch (err) {
-    console.warn(`[invoke] fallo ${name}:`, err?.status || '', err?.message || err);
-    // 2) Fallback con fetch directo a la URL de functions
-    const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+const url  = import.meta.env.VITE_SUPABASE_URL;            // https://<project>.supabase.co
+const anon = import.meta.env.VITE_SUPABASE_ANON_KEY;       // anon pública
 
-    // agrega JWT si hay sesión (para RLS) — opcional
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
-    } catch {}
-
-    const res = await fetch(`${FUNCTIONS_BASE}/${name}`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-    });
-    const text = await res.text();
-    if (!res.ok) throw new Error(`Function ${name} (${res.status}): ${text || 'sin detalle'}`);
-    try { return JSON.parse(text); } catch { return text; }
-  }
+if (!url || !anon) {
+  throw new Error('Faltan VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY');
 }
+
+// Permite sobreescribir el dominio de Functions (útil si usas un subdominio propio en Vercel)
+const functionsUrlRaw = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || `${url}/functions/v1`;
+const functionsUrl = functionsUrlRaw.replace(/\/+$/, ''); // normaliza sin / final
+
+// ---- Singleton sólido con caché global (sobrevive HMR) ----
+const globalKey = '__supabase_singleton__';
+
+function create() {
+  return createClient(url, anon, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+    realtime: {
+      // Throttle sano para no saturar
+      params: { eventsPerSecond: 3 },
+    },
+    functions: {
+      url: functionsUrl,
+    },
+    // (opcional) especifica schema si usas otro distinto de 'public'
+    // db: { schema: 'public' },
+  });
+}
+
+export const supabase =
+  (globalThis[globalKey] ??= { client: create() }).client;

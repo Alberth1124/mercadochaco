@@ -82,12 +82,12 @@ export default function FooterMC(){
             <ul className="list-unstyled m-0">
               <li className="mb-2">
                 <a
-                  href="mailto:alberthsibautylabardenz@gmail.com"
+                  href="mailto:alberthjsl11@gmail.com"
                   className="text-white text-decoration-none"
                   aria-label="Enviar correo a Reporte Chaco"
                 >
                   <FaEnvelope className="me-2" size={16} />
-                  alberthsibautylabardenz@gmail.com
+                  alberthjsl11@gmail.com
                 </a>
               </li>
 
