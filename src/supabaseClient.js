@@ -1,4 +1,3 @@
-// src/supabaseClient.js
 import { createClient } from '@supabase/supabase-js';
 
 const url = import.meta.env.VITE_SUPABASE_URL;            // https://<project>.supabase.co
@@ -13,6 +12,9 @@ if (!url || !anon) {
 const functionsUrlRaw =
   import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || `${url}/functions/v1`;
 const functionsUrl = functionsUrlRaw.replace(/\/+$/, ''); // sin / al final
+
+// Verificación de la URL de las funciones
+console.log("Functions URL:", functionsUrl);
 
 // Singleton para evitar doble instanciación (y duplicar suscripciones Realtime)
 let _client;
@@ -32,6 +34,13 @@ export const supabase = (() => {
       url: functionsUrl,
     },
   });
+
+  // Verificar la conexión con la base de datos para asegurar que la configuración es correcta
+  _client
+    .from('pedidos')
+    .select('*')
+    .then(response => console.log('Conexión exitosa:', response))
+    .catch(error => console.error('Error de conexión:', error));
 
   return _client;
 })();
