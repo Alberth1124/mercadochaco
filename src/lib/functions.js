@@ -1,37 +1,19 @@
-// src/supabaseClient.js
-import { createClient } from '@supabase/supabase-js';
-
-const url  = import.meta.env.VITE_SUPABASE_URL;            // https://<project>.supabase.co
-const anon = import.meta.env.VITE_SUPABASE_ANON_KEY;       // anon pública
-
-if (!url || !anon) {
-  throw new Error('Faltan VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY');
-}
-
-// Permite sobreescribir el dominio de Functions (útil si usas un subdominio propio en Vercel)
-const functionsUrlRaw = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || `${url}/functions/v1`;
-const functionsUrl = functionsUrlRaw.replace(/\/+$/, ''); // normaliza sin / final
-
-// ---- Singleton sólido con caché global (sobrevive HMR) ----
-const globalKey = '__supabase_singleton__';
-
-function create() {
-  return createClient(url, anon, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
+// src/lib/functions.js
+export async function invokeOrFetch(functionName, body, { token }) {
+  const response = await fetch(`${import.meta.env.VITE_SUPABASE_FUNCTIONS_URL}/${functionName}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,  // Enviar el token de autorización
+      "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY  // Enviar el apikey para autenticación
     },
-    realtime: {
-      // Throttle sano para no saturar
-      params: { eventsPerSecond: 3 },
-    },
-    functions: {
-      url: functionsUrl,
-    },
-    // (opcional) especifica schema si usas otro distinto de 'public'
-    // db: { schema: 'public' },
+    body: JSON.stringify(body)
   });
-}
 
-export const supabase =
-  (globalThis[globalKey] ??= { client: create() }).client;
+  // Verifica si la respuesta es válida
+  if (!response.ok) {
+    throw new Error(`Error al invocar la función ${functionName}: ${response.statusText}`);
+  }
+
+  return response.json();
+}

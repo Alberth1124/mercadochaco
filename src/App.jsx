@@ -71,7 +71,7 @@ export default function App(){
               <Route path="/perfil" element={<ProtectedRoute><Perfil/></ProtectedRoute>} />
               <Route path="/carrito" element={<Carrito />} />
 
-              <Route path="/checkout/:pedidoId" element={<Checkout />} />
+              <Route path="/checkout/:pedidoId" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
 
               <Route path="/exito/:pedidoId" element={<ProtectedRoute><Exito /></ProtectedRoute> }/>
 
