@@ -37,7 +37,7 @@ export default function Checkout() {
     return data.total;
   };
 
-  const generarQR = async () => {
+ const generarQR = async () => {
   setLoading(true);
   try {
     const monto = await getMontoPedido();
@@ -48,8 +48,7 @@ export default function Checkout() {
     });
 
     if (error) {
-      console.error('Error al generar el QR:', error.message || error);
-      setEstadoPago('Error al generar el QR. Verifica el servidor.');
+      console.error('Error al generar el QR:', error);
       return;
     }
 
@@ -57,15 +56,14 @@ export default function Checkout() {
       setQrImage(`data:image/png;base64,${data.base64}`);
     } else {
       console.error('No se recibió el QR');
-      setEstadoPago('No se recibió el QR.');
     }
   } catch (error) {
     console.error('Error generando el QR:', error);
-    setEstadoPago('Error al generar el QR.');
   } finally {
     setLoading(false);
   }
 };
+
 
 
   const verificarEstadoPago = async () => {
