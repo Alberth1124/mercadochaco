@@ -1,112 +1,115 @@
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+// src/pages/Checkout.jsx
+import { useEffect, useMemo, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 
 export default function Checkout() {
   const { pedidoId } = useParams();
-  const [qrImage, setQrImage] = useState(null);
-  const [estadoPago, setEstadoPago] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const [qr, setQr] = useState(null);
+  const [alias, setAlias] = useState(null);
+  const [estado, setEstado] = useState('PENDIENTE');
+  const [loading, setLoading] = useState(true);
+  const [checking, setChecking] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  useEffect(() => {
-    if (!pedidoId) {
-      console.error('Pedido ID no está disponible');
-      return;
-    }
-
-    generarQR();
+  // Canal Realtime (memorizado por pedido)
+  const channel = useMemo(() => {
+    return supabase.channel(`sip:${pedidoId}`);
   }, [pedidoId]);
 
-  const getMontoPedido = async () => {
-    if (!pedidoId) {
-      console.error('Pedido ID no está definido');
-      return;
+  // Generar QR al montar
+  useEffect(() => {
+    let mounted = true;
+    async function run() {
+      setLoading(true);
+      setErrorMsg('');
+      try {
+        const { data, error } = await supabase.functions.invoke('sip-genera-qr', {
+          body: { pedidoId },
+        });
+        if (error) throw error;
+        // data: { alias, qr_image_base64, fecha_vencimiento, ... }
+        if (mounted) {
+          setQr(data?.qr_image_base64 ? `data:image/png;base64,${data.qr_image_base64}` : null);
+          setAlias(data?.alias || null);
+          setEstado('PENDIENTE');
+        }
+      } catch (e) {
+        setErrorMsg(e?.message || 'Error generando QR');
+      } finally {
+        setLoading(false);
+      }
     }
+    run();
+    return () => { mounted = false; };
+  }, [pedidoId]);
 
-    const { data, error } = await supabase
-      .from('pedidos')
-      .select('total')
-      .eq('id', pedidoId)
-      .single();
+  // Suscripción Realtime a pagos_sip (estado de pago)
+  useEffect(() => {
+    channel
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'pagos_sip', filter: `pedido_id=eq.${pedidoId}` },
+        payload => {
+          const next = (payload?.new?.estado || payload?.new?.status || '').toUpperCase();
+          if (next) {
+            setEstado(next);
+            if (next === 'PAGADO') {
+              navigate(`/exito/${pedidoId}`);
+            }
+          }
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [channel, navigate, pedidoId]);
 
-    if (error || !data) {
-      console.error('Error al obtener el monto del pedido:', error);
-      throw new Error('Pedido no encontrado');
-    }
-
-    return data.total;
-  };
-
- const generarQR = async () => {
-  setLoading(true);
-  try {
-    const monto = await getMontoPedido();
-    console.log('Monto obtenido:', monto);
-
-    const { data, error } = await supabase.functions.invoke('sip-genera-qr', {
-      body: { pedido_id: pedidoId, monto, glosa: `Pedido ${pedidoId}` },
-    });
-
-    if (error) {
-      console.error('Error al generar el QR:', error);
-      return;
-    }
-
-    if (data?.base64) {
-      setQrImage(`data:image/png;base64,${data.base64}`);
-    } else {
-      console.error('No se recibió el QR');
-    }
-  } catch (error) {
-    console.error('Error generando el QR:', error);
-  } finally {
-    setLoading(false);
-  }
-};
-
-
-
-  const verificarEstadoPago = async () => {
-    setLoading(true);
+  async function verificarEstado() {
+    setChecking(true);
+    setErrorMsg('');
     try {
-      const { data, error } = await supabase
-        .from('pagos_sip')
-        .select('estado')
-        .eq('pedido_id', pedidoId)
-        .single();
-
-      if (error) {
-        console.error('Error al verificar el estado del pago:', error);
-        setEstadoPago('Error al verificar el estado del pago.');
-        return;
+      const body = alias ? { alias } : { pedidoId };
+      const { data, error } = await supabase.functions.invoke('sip-estado', { body });
+      if (error) throw error;
+      const next = (data?.estadoActual || '').toUpperCase();
+      if (next) {
+        setEstado(next);
+        if (next === 'PAGADO') {
+          navigate(`/exito/${pedidoId}`);
+        }
       }
-
-      if (data?.estado === 'confirmado') {
-        setEstadoPago('Pago confirmado. ¡Gracias por tu compra!');
-      } else {
-        setEstadoPago(`Estado del pago: ${data?.estado || 'Desconocido'}`);
-      }
-    } catch (error) {
-      console.error('Error al verificar el estado del pago:', error);
-      setEstadoPago('Error al verificar el estado del pago.');
+    } catch (e) {
+      setErrorMsg(e?.message || 'Error verificando estado');
     } finally {
-      setLoading(false);
+      setChecking(false);
     }
-  };
+  }
 
   return (
-    <div>
-      <h4>Estado del Pago</h4>
-      {loading && <p>Generando QR...</p>}
-      {qrImage && (
-        <div>
-          <img src={qrImage} alt="QR SIP" style={{ maxWidth: 260 }} />
+    <div style={{ maxWidth: 680, margin: '24px auto', padding: 16 }}>
+      <h2>Pago con QR SIP</h2>
+
+      {loading && <p>Generando QR…</p>}
+      {errorMsg && <p style={{ color: 'red' }}>{errorMsg}</p>}
+
+      {!loading && !qr && !errorMsg && (
+        <p>No se pudo obtener el QR. Intenta nuevamente.</p>
+      )}
+
+      {!loading && qr && (
+        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: 16, alignItems: 'start' }}>
+          <img src={qr} alt="QR SIP" style={{ width: 260, height: 260, border: '1px solid #EEE' }} />
+          <div>
+            <p><b>Estado:</b> {estado}</p>
+            <p><b>Alias:</b> {alias || '—'}</p>
+            <button onClick={verificarEstado} disabled={checking} style={{ padding: '8px 12px' }}>
+              {checking ? 'Verificando…' : 'Verificar estado'}
+            </button>
+            <p style={{ fontSize: 12, color: '#666', marginTop: 8 }}>
+              Escanea el código con tu app bancaria y confirma el pago.
+            </p>
+          </div>
         </div>
       )}
-      <button onClick={verificarEstadoPago} disabled={loading}>
-        {loading ? 'Verificando...' : 'Verificar Estado de Pago'}
-      </button>
-      {estadoPago && <p>{estadoPago}</p>}
     </div>
   );
 }
