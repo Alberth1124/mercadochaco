@@ -21,7 +21,7 @@ export default function MisPedidos() {
       const { data, error } = await supabase
         .from("v_pedidos_detalle")
         .select("*")
-        .eq("usuario_id", user.id)
+        .eq("cliente_id", user.id)          // ← ya agregaste cliente_id en la vista
         .order("creado_en", { ascending: false });
       if (error) setErr(error.message); else setRows(data || []);
       setLoading(false);
@@ -31,6 +31,8 @@ export default function MisPedidos() {
   const color = (estado) =>
     estado === "pagado" ? "success" :
     estado === "pendiente" ? "warning" : "secondary";
+
+  const money = (n) => `Bs ${Number(n || 0).toFixed(2)}`;
 
   const descargarRecibo = async (pedidoId) => {
     try {
@@ -63,30 +65,39 @@ export default function MisPedidos() {
         <Table responsive bordered hover className="mt-3">
           <thead>
             <tr>
-              <th>Fecha</th><th>Pedido</th><th>Producto</th><th>Cant.</th>
-              <th>PU</th><th>Subtotal</th><th>Estado</th><th>Acciones</th>
+              <th>Fecha</th>
+              <th>Pedido</th>
+              <th>Producto</th>
+              <th>Cant.</th>
+              <th>PU</th>
+              <th>Subtotal</th>
+              <th>Estado</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={`${r.pedido_id}:${r.producto_id}`}>
-                <td>{new Date(r.creado_en).toLocaleString()}</td>
-                <td>{r.pedido_id.slice(0, 8)}…</td>
-                <td>{r.producto_nombre}</td>
-                <td>{r.cantidad}</td>
-                <td>Bs {Number(r.precio_unitario).toFixed(2)}</td>
-                <td>Bs {Number(r.subtotal).toFixed(2)}</td>
-                <td><Badge bg={color(r.estado)}>{r.estado}</Badge></td>
-                <td>
-                  {r.estado === "pagado"
-                    ? <button className="btn btn-sm btn-outline-primary"
-                              onClick={() => descargarRecibo(r.pedido_id)}>
-                        Recibo
-                      </button>
-                    : "—"}
-                </td>
-              </tr>
-            ))}
+            {rows.map((r) => {
+              const subtotal = Number(r.cantidad) * Number(r.precio_unit); // ← calcula aquí
+              return (
+                <tr key={`${r.pedido_id}:${r.producto_id}`}>
+                  <td>{new Date(r.creado_en).toLocaleString()}</td>
+                  <td>{r.pedido_id.slice(0, 8)}…</td>
+                  <td>{r.producto_nombre}</td>
+                  <td>{r.cantidad}</td>
+                  <td>{money(r.precio_unit)}</td>
+                  <td>{money(subtotal)}</td>
+                  <td><Badge bg={color(r.estado)}>{r.estado}</Badge></td>
+                  <td>
+                    {r.estado === "pagado"
+                      ? <button className="btn btn-sm btn-outline-primary"
+                                onClick={() => descargarRecibo(r.pedido_id)}>
+                          Recibo
+                        </button>
+                      : "—"}
+                  </td>
+                </tr>
+              );
+            })}
             {rows.length === 0 && (
               <tr><td colSpan={8} className="text-center text-muted">Aún no tienes pedidos</td></tr>
             )}

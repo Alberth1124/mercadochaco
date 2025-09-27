@@ -29,9 +29,15 @@ export default function Checkout() {
           body: { pedidoId },
         });
         if (error) throw error;
-        // data: { alias, qr_image_base64, fecha_vencimiento, ... }
+
+        // 🔽 Normaliza el base64: si viene sin "data:", se lo agregamos
         if (mounted) {
-          setQr(data?.qr_image_base64 ? `data:image/png;base64,${data.qr_image_base64}` : null);
+          const raw = data?.qr_image_base64 || null;
+          const src = raw
+            ? (String(raw).startsWith('data:') ? String(raw) : `data:image/png;base64,${raw}`)
+            : null;
+
+          setQr(src);
           setAlias(data?.alias || null);
           setEstado('PENDIENTE');
         }
@@ -48,7 +54,8 @@ export default function Checkout() {
   // Suscripción Realtime a pagos_sip (estado de pago)
   useEffect(() => {
     channel
-      .on('postgres_changes',
+      .on(
+        'postgres_changes',
         { event: '*', schema: 'public', table: 'pagos_sip', filter: `pedido_id=eq.${pedidoId}` },
         payload => {
           const next = (payload?.new?.estado || payload?.new?.status || '').toUpperCase();
@@ -58,7 +65,8 @@ export default function Checkout() {
               navigate(`/exito/${pedidoId}`);
             }
           }
-        })
+        }
+      )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [channel, navigate, pedidoId]);
