@@ -10,7 +10,7 @@ export default function Reportes(){
   const [desde, setDesde] = useState(dayjs().subtract(30,'day').format('YYYY-MM-DD'));
   const [hasta, setHasta] = useState(dayjs().format('YYYY-MM-DD'));
   const [cargando, setCargando] = useState(true);
-  const [serie, setSerie] = useState([]);      // [{fecha, total, pedidos}]
+  const [serie, setSerie] = useState([]);      // [{fecha, total, pedidos?}]
   const [top, setTop] = useState([]);          // [{producto_id, nombre, cantidad_total, total}]
   const soyAdmin = !!perfil?.es_admin;
   const soyProductor = perfil?.rol === 'productor';
@@ -23,21 +23,34 @@ export default function Reportes(){
         const { data: t } = await supabase.rpc('reporte_top_productos', { p_desde: desde, p_hasta: hasta, p_limite: 10 });
         setSerie(s||[]); setTop(t||[]);
       } else if (soyProductor){
-        const { data: s } = await supabase.rpc('reporte_ventas_productor', { p_productor: user.id, p_desde: desde, p_hasta: hasta });
-        setSerie((s||[]).map(r => ({ ...r, pedidos: null })));
-        // top productos del productor (cliente-side simple)
-        const { data: detalle } = await supabase
-          .from('v_pedidos_detalle')
-          .select('producto_id, producto_nombre, cantidad, precio_unit, creado_en, estado')
-          .gte('creado_en', desde).lt('creado_en', dayjs(hasta).add(1,'day').toISOString());
-        const mine = (detalle||[]).filter(r => r.estado === 'pagado'); // RLS limita a mis ventas
-        const agg = {};
-        mine.forEach(r => {
-          if (!agg[r.producto_id]) agg[r.producto_id] = { producto_id: r.producto_id, nombre: r.producto_nombre, cantidad_total: 0, total: 0 };
-          agg[r.producto_id].cantidad_total += r.cantidad;
-          agg[r.producto_id].total += r.cantidad * r.precio_unit;
-        });
-        setTop(Object.values(agg).sort((a,b)=>b.total-a.total).slice(0,10));
+        // 1) Serie por día desde la vista (solo PAGADO)
+        const { data: v, error } = await supabase
+          .from('v_productor_reportes_ventas')
+          .select('*')
+          .eq('productor_id', user.id)                          // 👈 filtro productor
+          .gte('fecha', desde)
+          .lte('fecha', hasta)
+          .order('fecha', { ascending: true });
+        if (error) throw error;
+
+        // Agregar por fecha (sum total / cantidad)
+        const aggByDay = {};
+        for (const r of v || []) {
+          const key = String(r.fecha).slice(0,10);
+          if (!aggByDay[key]) aggByDay[key] = { fecha: key, total: 0, pedidos: null }; // pedidos opcional
+          aggByDay[key].total += Number(r.monto || 0);
+        }
+        setSerie(Object.values(aggByDay).sort((a,b)=> a.fecha.localeCompare(b.fecha)));
+
+        // 2) Top productos desde la misma vista en el rango
+        const aggTop = {};
+        for (const r of v || []) {
+          const k = r.producto_id;
+          if (!aggTop[k]) aggTop[k] = { producto_id: k, nombre: r.producto_nombre, cantidad_total: 0, total: 0 };
+          aggTop[k].cantidad_total += Number(r.cantidad || 0);
+          aggTop[k].total          += Number(r.monto || 0);
+        }
+        setTop(Object.values(aggTop).sort((a,b)=> b.total - a.total).slice(0,10));
       } else {
         setSerie([]); setTop([]);
       }

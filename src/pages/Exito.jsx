@@ -53,12 +53,6 @@ export default function Exito() {
     }
   };
 
-  // OPCIONAL: abrir el PDF en una pestaña nueva (GET con ?pedido_id=...)
-  const abrirRecibo = () => {
-    const url = `${FUNCTIONS_BASE}/recibo-pdf?pedido_id=${encodeURIComponent(pedidoId)}`;
-    window.open(url, "_blank");
-  };
-
   return (
     <div className="container py-4" style={{ maxWidth: 720 }}>
       <h3>✅ ¡Pago exitoso!</h3>
@@ -75,13 +69,6 @@ export default function Exito() {
           {downloading ? "Generando PDF…" : "Descargar recibo (PDF)"}
         </button>
 
-        <button
-          onClick={abrirRecibo}
-          className="btn btn-outline-dark"
-          title="Abrir el PDF en una pestaña nueva"
-        >
-          Ver recibo (abrir)
-        </button>
 
         <Link to="/mis-pedidos" className="btn btn-success">Ver mis pedidos</Link>
         <Link to="/catalogo" className="btn btn-outline-secondary">Seguir comprando</Link>
