@@ -1,90 +1,100 @@
-// src/pages/Entrega.jsx
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { supabase } from '../supabaseClient';
+import { useEffect, useState } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { supabase } from "../supabaseClient";
 
 export default function Entrega() {
   const { pedidoId } = useParams();
   const nav = useNavigate();
-  const [pedido, setPedido] = useState(null);
   const [form, setForm] = useState({
-    contacto_nombre: '',
-    contacto_telefono: '',
-    entrega_direccion: '',
-    entrega_referencia: ''
+    contacto_nombre: "",
+    contacto_telefono: "",
+    entrega_direccion: "",
+    entrega_referencia: ""
   });
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState('');
+  const [err, setErr] = useState("");
 
+  // Cargar si ya existe
   useEffect(() => {
     (async () => {
-      setErr('');
-      // Carga base: pedido + (si existe) entrega
-      const [{ data: ped, error: e1 }, { data: ent, error: e2 }] = await Promise.all([
-        supabase.from('pedidos').select('id, estado').eq('id', pedidoId).single(),
-        supabase.from('pedidos_entrega').select('*').eq('pedido_id', pedidoId).maybeSingle(),
-      ]);
-      if (e1) return setErr(e1.message);
-      setPedido(ped);
-      setForm({
-        contacto_nombre:   ent?.contacto_nombre   || '',
-        contacto_telefono: ent?.contacto_telefono || '',
-        entrega_direccion: ent?.entrega_direccion || '',
-        entrega_referencia:ent?.entrega_referencia|| '',
-      });
+      setLoading(true); setErr("");
+      try {
+        // RLS: solo dueño puede leer/editar
+        const { data, error } = await supabase
+          .from("pedidos_entrega")
+          .select("*")
+          .eq("pedido_id", pedidoId)
+          .maybeSingle();
+        if (error) throw error;
+        if (data) setForm({
+          contacto_nombre: data.contacto_nombre || "",
+          contacto_telefono: data.contacto_telefono || "",
+          entrega_direccion: data.entrega_direccion || "",
+          entrega_referencia: data.entrega_referencia || ""
+        });
+      } catch (e) {
+        setErr(e.message || "No se pudo cargar la entrega");
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [pedidoId]);
 
-  const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const onChange = (k) => (e) => setForm(s => ({ ...s, [k]: e.target.value }));
 
   const guardar = async () => {
-    setSaving(true); setErr('');
+    setSaving(true); setErr("");
     try {
-      const payload = {
-        pedido_id: pedidoId,
-        contacto_nombre:   form.contacto_nombre?.trim()    || null,
-        contacto_telefono: form.contacto_telefono?.trim()  || null,
-        entrega_direccion: form.entrega_direccion?.trim()  || null,
-        entrega_referencia:form.entrega_referencia?.trim() || null,
-      };
+      // UPSERT: inserta si no existe, actualiza si existe
       const { error } = await supabase
-        .from('pedidos_entrega')
-        .upsert(payload, { onConflict: 'pedido_id' }); // 👈 evita duplicados
+        .from("pedidos_entrega")
+        .upsert({ pedido_id: pedidoId, ...form })
+        .select()
+        .single();
       if (error) throw error;
+
+      // (Opcional) marca en pedidos una bandera “entrega_confirmada”
+      await supabase.from("pedidos")
+        .update({ entrega_confirmada: true })
+        .eq("id", pedidoId);
+
+      // Ir al éxito (descargar recibo, etc.)
       nav(`/exito/${pedidoId}`);
     } catch (e) {
-      setErr(e.message || 'No se pudo guardar');
+      setErr(e.message || "No se pudo guardar");
     } finally {
       setSaving(false);
     }
   };
 
+  if (loading) return <div className="container py-4">Cargando…</div>;
+
   return (
     <div className="container py-4" style={{ maxWidth: 720 }}>
       <h3>Datos de entrega</h3>
-      {pedido && <p className="text-muted">Pedido: {pedido.id} — Estado: {pedido.estado}</p>}
       {err && <div className="alert alert-danger">{err}</div>}
 
       <div className="mb-3">
         <label className="form-label">Nombre de contacto</label>
-        <input name="contacto_nombre" className="form-control" value={form.contacto_nombre} onChange={onChange} />
+        <input className="form-control" value={form.contacto_nombre} onChange={onChange("contacto_nombre")} />
       </div>
       <div className="mb-3">
-        <label className="form-label">Teléfono</label>
-        <input name="contacto_telefono" className="form-control" value={form.contacto_telefono} onChange={onChange} />
+        <label className="form-label">Teléfono de contacto</label>
+        <input className="form-control" value={form.contacto_telefono} onChange={onChange("contacto_telefono")} />
       </div>
       <div className="mb-3">
-        <label className="form-label">Dirección de entrega</label>
-        <input name="entrega_direccion" className="form-control" value={form.entrega_direccion} onChange={onChange} />
+        <label className="form-label">Dirección</label>
+        <textarea className="form-control" rows={2} value={form.entrega_direccion} onChange={onChange("entrega_direccion")} />
       </div>
       <div className="mb-3">
-        <label className="form-label">Referencia</label>
-        <input name="entrega_referencia" className="form-control" value={form.entrega_referencia} onChange={onChange} />
+        <label className="form-label">Referencia (opcional)</label>
+        <input className="form-control" value={form.entrega_referencia} onChange={onChange("entrega_referencia")} />
       </div>
 
       <div className="d-flex gap-2">
-        <button className="btn btn.success btn-success" onClick={guardar} disabled={saving}>
-          {saving ? 'Guardando…' : 'Guardar y continuar'}
+        <button className="btn btn-success" onClick={guardar} disabled={saving}>
+          {saving ? "Guardando…" : "Guardar y continuar"}
         </button>
         <Link to={`/checkout/${pedidoId}`} className="btn btn-outline-secondary">Volver</Link>
       </div>

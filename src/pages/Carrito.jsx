@@ -1,21 +1,29 @@
+// src/pages/Carrito.jsx
 import { useMemo, useState } from "react";
 import { Table, Button, Alert, Card } from "react-bootstrap";
 import { useCart } from "../context/CartContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabaseClient";
 
-// Formatea dinero sin reventar si llega undefined/NaN
+// ===== Utils =====
 const money = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n.toFixed(2) : "0.00";
 };
 
-// Normaliza un item
 const getIds = (it) => ({
   id: it.producto_id || it?.producto?.id || it?.id,
   precio: Number(it?.producto?.precio ?? it?.precio ?? 0),
   qty: Number(it?.cantidad ?? 0),
 });
+
+function pickErr(e) {
+  // Mejora los mensajes que vienen de PostgREST/Supabase
+  if (!e) return "Error desconocido";
+  if (typeof e === "string") return e;
+  const { message, details, hint } = e;
+  return message || details || hint || "Error";
+}
 
 export default function Carrito() {
   const { items, total, updateQty, remove, clear } = useCart();
@@ -23,24 +31,24 @@ export default function Carrito() {
   const [placing, setPlacing] = useState(false);
   const navigate = useNavigate();
 
-  // Dedupe de items (si hay mismo producto dos veces)
+  // Deduplicar items por producto_id
   const itemsDedup = useMemo(() => {
     const map = new Map();
     (items || []).forEach((it) => {
       const { id, precio, qty } = getIds(it);
       if (!id || qty <= 0) return;
-      const prev = map.get(id)?.qty || 0;
+      const prev = map.get(id)?.cantidad || 0;
       map.set(id, {
         ...it,
         producto_id: id,
-        cantidad: prev + qty,
+        cantidad: prev + (Number.isFinite(qty) ? qty : 0),
         precio: Number.isFinite(precio) ? precio : 0,
       });
     });
     return Array.from(map.values());
   }, [items]);
 
-  // Total “a prueba de balas”
+  // Total seguro si el contexto trae algo raro
   const safeTotal = useMemo(() => {
     if (Number.isFinite(Number(total))) return Number(total);
     return (itemsDedup || []).reduce((acc, it) => {
@@ -63,15 +71,13 @@ export default function Carrito() {
   const inc = async (it) => onChangeQty(getIds(it).id, Number(it.cantidad || 0) + 1);
   const dec = async (it) => onChangeQty(getIds(it).id, Math.max(0, Number(it.cantidad || 0) - 1));
 
-  // === CONTINUAR AL PAGO ===
+  // ===== Continuar al pago =====
   const continuarPago = async () => {
     if (!itemsDedup.length) return;
     if (safeTotal <= 0) { alert("El total debe ser mayor a cero."); return; }
-
-    // Evita doble click
     if (placing) return;
-    setPlacing(true);
 
+    setPlacing(true);
     try {
       // 1) Sesión
       const { data: { user }, error: errUser } = await supabase.auth.getUser();
@@ -83,7 +89,7 @@ export default function Carrito() {
         return;
       }
 
-      // 2) Crear pedido pendiente
+      // 2) Crear pedido (estado minúscula según enum)
       const totalNumber = Number(safeTotal) || 0;
       const { data: pedido, error: errPedido } = await supabase
         .from("pedidos")
@@ -92,42 +98,46 @@ export default function Carrito() {
           total: totalNumber,
           estado: "pendiente",
         })
-        .select("id")
-        .single();
-      if (errPedido) throw errPedido;
+        .select("id")        // ✅ NUNCA 'id:1'
+        .single();           // ✅ vuelve un objeto
 
+      if (errPedido) throw errPedido;
       const pedidoId = pedido.id;
 
-      // 3) Insertar items del pedido
-      const rows = itemsDedup.map((it) => ({
-        pedido_id: pedidoId,
-        producto_id: getIds(it).id,
-        cantidad: Number(it?.cantidad || 0),
-        // Usa el nombre de columna real de tu tabla (aquí: precio_unit)
-        precio_unit: Number(it?.producto?.precio ?? it?.precio ?? 0),
-      })).filter(r => r.producto_id && r.cantidad > 0);
+      // 3) Insertar items
+      const rows = itemsDedup
+        .map((it) => {
+          const pid = getIds(it).id;
+          const qty = Number(it?.cantidad || 0);
+          const pu = Number(it?.producto?.precio ?? it?.precio ?? 0);
+          return {
+            pedido_id: pedidoId,
+            producto_id: pid,
+            cantidad: Number.isFinite(qty) ? qty : 0,
+            precio_unit: Number.isFinite(pu) ? pu : 0, // 👈 nombre exacto de columna
+          };
+        })
+        .filter((r) => r.producto_id && r.cantidad > 0);
 
       if (!rows.length) {
-        // Limpieza si no hay filas válidas
-        await supabase.from("pedidos").delete().eq("id", pedidoId);
-        throw new Error("No hay items válidos en el carrito.");
+        await supabase.from("pedidos").delete().eq("id", pedidoId); // rollback simple
+        throw new Error("No hay ítems válidos en el carrito.");
       }
 
       const { error: errItems } = await supabase.from("pedidos_items").insert(rows);
       if (errItems) {
-        // Rollback simple si falla items
-        await supabase.from("pedidos").delete().eq("id", pedidoId);
+        await supabase.from("pedidos").delete().eq("id", pedidoId); // rollback simple
         throw errItems;
       }
 
-      // 4) Navegar al Checkout
+      // 4) Ir al checkout (ahí se invoca sip-genera-qr)
       navigate(`/checkout/${pedidoId}`);
 
-      // (Opcional) vaciar carrito después de navegar
+      // Si quieres vaciar carrito después de navegar:
       // clear();
     } catch (e) {
       console.error(e);
-      alert(e.message || "No se pudo crear el pedido.");
+      alert(pickErr(e));
     } finally {
       setPlacing(false);
     }
@@ -160,7 +170,7 @@ export default function Carrito() {
     <div className="container mt-3">
       <h2 className="mb-3">Tu carrito</h2>
 
-      {/* ====== Desktop/Tablet (md y arriba): Tabla ====== */}
+      {/* ===== Desktop/Tablet ===== */}
       <div className="d-none d-md-block">
         <Table striped bordered hover responsive="md">
           <thead>
@@ -256,7 +266,7 @@ export default function Carrito() {
         </div>
       </div>
 
-      {/* ====== Móvil (xs–sm): Tarjetas ====== */}
+      {/* ===== Móvil ===== */}
       <div className="d-md-none">
         <div className="d-flex flex-column gap-2">
           {itemsDedup.map((it) => {
