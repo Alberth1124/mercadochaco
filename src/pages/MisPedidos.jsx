@@ -1,6 +1,6 @@
 // src/pages/MisPedidos.jsx
-import { useEffect, useState } from "react";
-import { Table, Badge, Spinner, Alert } from "react-bootstrap";
+import { useEffect, useMemo, useState } from "react";
+import { Table, Badge, Spinner, Alert, Row, Col, Form } from "react-bootstrap";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../context/AuthContext";
 
@@ -13,6 +13,7 @@ export default function MisPedidos() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+  const [q, setQ] = useState(""); // 🔍 buscador
 
   useEffect(() => {
     if (!user?.id) return;
@@ -55,10 +56,48 @@ export default function MisPedidos() {
     }
   };
 
+  // 🔎 Filtrado por texto libre
+  const filtrados = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return rows;
+
+    return rows.filter(r => {
+      const fecha = new Date(r.creado_en).toLocaleString().toLowerCase();
+      const pedido = String(r.pedido_id || "").toLowerCase();
+      const producto = String(r.producto_nombre || "").toLowerCase();
+      const estado = String(r.estado || "").toLowerCase();
+      const cant = String(r.cantidad ?? "").toLowerCase();
+      const pu = money(r.precio_unit).toLowerCase();
+      const subtotal = money(Number(r.cantidad) * Number(r.precio_unit)).toLowerCase();
+
+      return (
+        fecha.includes(term) ||
+        pedido.includes(term) ||
+        producto.includes(term) ||
+        estado.includes(term) ||
+        cant.includes(term) ||
+        pu.includes(term) ||
+        subtotal.includes(term)
+      );
+    });
+  }, [rows, q]);
+
   return (
     <div>
       <h4>Mis pedidos</h4>
-      {err && <Alert variant="danger">{err}</Alert>}
+
+      <Row className="g-2 mt-2">
+        <Col md={6}>
+          <Form.Control
+            placeholder="Buscar por fecha, pedido, producto, estado…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </Col>
+      </Row>
+
+      {err && <Alert variant="danger" className="mt-2">{err}</Alert>}
+
       {loading ? (
         <div className="text-center py-5"><Spinner animation="border" /></div>
       ) : (
@@ -76,8 +115,8 @@ export default function MisPedidos() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
-              const subtotal = Number(r.cantidad) * Number(r.precio_unit); // ← calcula aquí
+            {filtrados.map((r) => {
+              const subtotal = Number(r.cantidad) * Number(r.precio_unit);
               return (
                 <tr key={`${r.pedido_id}:${r.producto_id}`}>
                   <td>{new Date(r.creado_en).toLocaleString()}</td>
@@ -89,8 +128,10 @@ export default function MisPedidos() {
                   <td><Badge bg={color(r.estado)}>{r.estado}</Badge></td>
                   <td>
                     {r.estado === "pagado"
-                      ? <button className="btn btn-sm btn-outline-primary"
-                                onClick={() => descargarRecibo(r.pedido_id)}>
+                      ? <button
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={() => descargarRecibo(r.pedido_id)}
+                        >
                           Recibo
                         </button>
                       : "—"}
@@ -98,8 +139,13 @@ export default function MisPedidos() {
                 </tr>
               );
             })}
+
+            {/* Mensajes de estado */}
             {rows.length === 0 && (
               <tr><td colSpan={8} className="text-center text-muted">Aún no tienes pedidos</td></tr>
+            )}
+            {rows.length > 0 && filtrados.length === 0 && (
+              <tr><td colSpan={8} className="text-center text-muted">No hay coincidencias para “{q}”.</td></tr>
             )}
           </tbody>
         </Table>

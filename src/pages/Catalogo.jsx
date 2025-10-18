@@ -4,6 +4,8 @@ import { supabase } from "../supabaseClient";
 import ProductCard from "../components/ProductCard";
 import CardCarousel from "../components/PromoCarousel";
 import CarruselOfertas from "../components/CarruselOfertas";
+import { useNavigate } from "react-router-dom";
+import { FaArrowLeft } from "react-icons/fa";
 
 export default function Catalogo() {
   const [items, setItems] = useState([]);
@@ -13,6 +15,8 @@ export default function Catalogo() {
   const [q, setQ] = useState("");
   const [categoriaId, setCategoriaId] = useState("");
   const [categorias, setCategorias] = useState([]);
+
+  const nav = useNavigate();
 
   const PER_PAGE = 24;
   const COLUMNS =
@@ -46,7 +50,7 @@ export default function Catalogo() {
 
       const { data, error } = await query
         .order("id", { ascending: false })
-        .range(0, PER_PAGE - 1); // paginación: primeros 24
+        .range(0, PER_PAGE - 1);
 
       if (error) throw error;
       setItems(data || []);
@@ -72,7 +76,18 @@ export default function Catalogo() {
 
   return (
     <div>
-      {/* 👇 Carrusel de ofertas arriba del título */}
+      {/* Flecha volver */}
+      <div className="mb-2 d-flex align-items-center">
+        <Button
+          variant="link"
+          className="p-0 me-2 text-secondary"
+          onClick={() => nav(-1)}
+        >
+           <FaArrowLeft className="me-1" style={{ color: "var(--mc-green-600)" }} />
+        </Button>
+      </div>
+
+      {/* Carrusel de ofertas */}
       <div className="mb-3">
         <CarruselOfertas title="Productos en oferta" />
       </div>
@@ -113,9 +128,10 @@ export default function Catalogo() {
           <Spinner />
         </div>
       ) : (
-        <Row className="g-3">
+        // ⬇️ Grid responsivo: mínimo 2 tarjetas en móvil
+        <Row className="g-2 g-md-3">
           {items.map((p) => (
-            <Col key={p.id} xs={12} md={6} lg={4} xl={3}>
+            <Col key={p.id} xs={6} sm={6} md={4} lg={3} xl={3} xxl={2}>
               <ProductCard item={p} />
             </Col>
           ))}
@@ -124,7 +140,7 @@ export default function Catalogo() {
       )}
 
       <div className="section-divider"></div>
-      <CardCarousel title="Nuestros Colaboradores" bucket="colaboradores" />
+      <CardCarousel title="Nuestros Colaboradores" bucket="colaborado res" />
     </div>
   );
 }

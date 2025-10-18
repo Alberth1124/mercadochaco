@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { Row, Col, Button, Spinner, Alert, ButtonGroup, Card, Badge, Table } from "react-bootstrap";
 import { supabase } from "../supabaseClient";
 import { FaWhatsapp, FaMapMarkerAlt } from "react-icons/fa";
-import ReactionBar from "../components/ReactionBar";
+import ReactionBarInline from "../components/ReactionBarInline";
 import ShareButtons from "../components/ShareButtons";
 import ProductChat from "../components/ProductChat";
 import CardCarousel from "../components/PromoCarousel";
@@ -30,10 +30,9 @@ export default function ProductoDetalle() {
           .from("v_catalogo")
           .select("*")
           .eq("id", criterion)
-          .single(); // <- ajuste mínimo: usar single()
+          .single();
 
         if (error) {
-          // Si no hay registros, single() devuelve error con código PGRST116
           if (error.code === "PGRST116") {
             setP(null);
           } else {
@@ -60,6 +59,7 @@ export default function ProductoDetalle() {
   if (!p) return <Alert variant="warning">Producto no encontrado.</Alert>;
 
   const foto = p.imagen_portada_url || "/img/noimage.jpg";
+
   const seller = `${p.productor_nombres ?? ""}${p.productor_apellidos ? ` ${p.productor_apellidos}` : ""}`.trim();
   const url = `${window.location.origin}/producto/${p.id}`;
   const ubicacion = [p.pais, p.departamento, p.municipio, p.comunidad].filter(Boolean).join(" — ");
@@ -78,6 +78,9 @@ export default function ProductoDetalle() {
     showToast({ title: "Agregado", body: p.nombre, variant: "success" });
   };
 
+  // 👇 intentamos deducir el UID del productor con varios posibles campos de la vista
+  const productorUid = p?.productor_usuario_id || p?.productor_id || p?.usuario_id || null;
+
   return (
     <div>
       <div className="mt-3">
@@ -95,6 +98,10 @@ export default function ProductoDetalle() {
               onError={(e) => { e.currentTarget.src = "/img/noimage.jpg"; }}
             />
           </div>
+
+          {/* Reacciones */}
+          <br />
+          <ReactionBarInline productoId={p.id} />
         </Col>
 
         {/* Info principal */}
@@ -102,7 +109,17 @@ export default function ProductoDetalle() {
           <h2 className="mb-1">{p.nombre}</h2>
 
           <div className="mb-1">
-            Vendido por: <b>{seller || "Productor"}</b>
+            Vendido por:{" "}
+            {productorUid ? (
+              <Link
+                to={`/productor/${productorUid}`}
+                className="fw-semibold text-decoration-none"
+              >
+                {seller || "Productor"}
+              </Link>
+            ) : (
+              <b>{seller || "Productor"}</b>
+            )}
           </div>
 
           {ubicacion && (
@@ -154,10 +171,7 @@ export default function ProductoDetalle() {
       </Row>
 
       <div className="section-divider"></div>
-
       <ProductChat productoId={p.id} />
-      <br />
-      <ReactionBar productoId={p.id} />
       <div className="section-divider"></div>
       <CardCarousel title="Nuestros Colaboradores" bucket="colaboradores" />
     </div>

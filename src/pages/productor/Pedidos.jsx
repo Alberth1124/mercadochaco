@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Table, Badge, Spinner, Alert } from "react-bootstrap";
+import { Table, Badge, Spinner, Alert, Form, Row, Col } from "react-bootstrap";
 import { supabase } from "../../supabaseClient";
 import { useAuth } from "../../context/AuthContext";
 
-const money = (n) => `Bs ${Number(n || 0).toFixed(2)}`;
 const color = (e) => {
   const s = String(e || "").toLowerCase();
   return s === "pagado" ? "success" : s === "pendiente" ? "warning" : s === "cancelado" ? "danger" : "secondary";
@@ -15,6 +14,7 @@ export default function Pedidos() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
+  const [q, setQ] = useState(""); // 🔍 buscador
 
   useEffect(() => {
     if (!user?.id) return;
@@ -22,9 +22,9 @@ export default function Pedidos() {
       setLoading(true); setErr(null);
       try {
         const { data, error } = await supabase
-          .from("v_pedidos_productor_detalle")         // 👈 vista nueva
+          .from("v_pedidos_productor_detalle") // vista a nivel de ítems
           .select("*")
-          .eq("productor_id", user.id)                 // 👈 filtro clave
+          .eq("productor_id", user.id)
           .order("creado_en", { ascending: false });
         if (error) throw error;
         setRows(data || []);
@@ -36,7 +36,7 @@ export default function Pedidos() {
     })();
   }, [user?.id]);
 
-  // Agrupar por pedido (porque la vista está a nivel de ítems)
+  // Agrupar por pedido y armar resumen de productos
   const pedidos = useMemo(() => {
     const map = new Map();
     for (const r of rows) {
@@ -45,21 +45,53 @@ export default function Pedidos() {
           pedido_id: r.pedido_id,
           creado_en: r.creado_en,
           estado: r.estado,
-          total: r.total,
-          cliente_email: r.cliente_email || "",
-          cliente_nombre: r.cliente_nombre || "",
-          items: [],
+          // total eliminado
+          productos: [], // nombres
         });
       }
-      map.get(r.pedido_id).items.push(r);
+      const entry = map.get(r.pedido_id);
+      if (r.producto_nombre) entry.productos.push(String(r.producto_nombre));
     }
-    return Array.from(map.values());
+
+    // Para mostrar en “Cliente” => nombre del producto (si hay varios, “( +N más )”)
+    const list = Array.from(map.values()).map(p => {
+      const uniq = Array.from(new Set(p.productos));
+      const head = uniq[0] || "—";
+      const extra = uniq.length > 1 ? ` (+${uniq.length - 1} más)` : "";
+      return { ...p, productoResumen: head + extra, productosSearch: uniq.join(" ") };
+    });
+
+    return list;
   }, [rows]);
+
+  // Filtro por buscador: producto / estado / id de pedido
+  const filtrados = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return pedidos;
+    return pedidos.filter(p =>
+      p.productoResumen.toLowerCase().includes(term) ||
+      p.productosSearch.toLowerCase().includes(term) ||
+      String(p.estado || "").toLowerCase().includes(term) ||
+      String(p.pedido_id || "").toLowerCase().includes(term)
+    );
+  }, [q, pedidos]);
 
   return (
     <div className="container py-3">
       <h4>Pedidos</h4>
-      {err && <Alert variant="danger">{err}</Alert>}
+
+      <Row className="g-2 mt-2">
+        <Col md={6}>
+          <Form.Control
+            placeholder="Buscar por producto, estado o ID de pedido…"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+          />
+        </Col>
+      </Row>
+
+      {err && <Alert variant="danger" className="mt-3">{err}</Alert>}
+
       {loading ? (
         <div className="text-center py-5"><Spinner animation="border" /></div>
       ) : (
@@ -68,57 +100,28 @@ export default function Pedidos() {
             <tr>
               <th>Fecha</th>
               <th>Pedido</th>
-              <th>Cliente</th>
+              <th>Producto</th>
               <th>Estado</th>
-              <th>Total</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {pedidos.map((p) => (
-              <>
-                <tr key={p.pedido_id}>
-                  <td>{new Date(p.creado_en).toLocaleString()}</td>
-                  <td>{p.pedido_id.slice(0, 8)}…</td>
-                  <td>{p.cliente_nombre || p.cliente_email || "—"}</td>
-                  <td><Badge bg={color(p.estado)}>{String(p.estado)}</Badge></td>
-                  <td>{money(p.total)}</td>
-                  <td>
-                    <Link to={`/productor/pedidos/${p.pedido_id}`} className="btn btn-sm btn-outline-primary">
-                      Ver
-                    </Link>
-                  </td>
-                </tr>
-
-                {/* Subtabla de ítems */}
-                <tr>
-                  <td colSpan={6} className="p-0">
-                    <Table size="sm" bordered className="mb-0">
-                      <thead>
-                        <tr>
-                          <th style={{ width: "45%" }}>Producto</th>
-                          <th>Cant.</th>
-                          <th>PU</th>
-                          <th>Subtotal</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {p.items.map((it) => (
-                          <tr key={`${p.pedido_id}:${it.producto_id}`}>
-                            <td>{it.producto_nombre}</td>
-                            <td>{it.cantidad}</td>
-                            <td>{money(it.precio_unit)}</td>
-                            <td>{money(it.cantidad * it.precio_unit)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </Table>
-                  </td>
-                </tr>
-              </>
+            {filtrados.map((p) => (
+              <tr key={p.pedido_id}>
+                <td>{new Date(p.creado_en).toLocaleString()}</td>
+                <td title={p.pedido_id}>{p.pedido_id.slice(0, 8)}…</td>
+                {/* Ahora aquí va el nombre del producto */}
+                <td title={p.productosSearch}>{p.productoResumen}</td>
+                <td><Badge bg={color(p.estado)}>{String(p.estado)}</Badge></td>
+                <td>
+                  <Link to={`/productor/pedidos/${p.pedido_id}`} className="btn btn-sm btn-outline-primary">
+                    Ver
+                  </Link>
+                </td>
+              </tr>
             ))}
-            {pedidos.length === 0 && (
-              <tr><td colSpan={6} className="text-center text-muted">No hay pedidos aún</td></tr>
+            {filtrados.length === 0 && (
+              <tr><td colSpan={5} className="text-center text-muted">No hay pedidos</td></tr>
             )}
           </tbody>
         </Table>

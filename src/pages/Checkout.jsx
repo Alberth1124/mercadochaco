@@ -57,10 +57,9 @@ export default function Checkout() {
     const onChange = (payload) => {
       const newEstado = (payload?.new?.estado || payload?.new?.status || '').toString().toUpperCase();
       if (newEstado === 'PAGADO') {
-        setEstado('PAGADO');
-        // Ir a captura de datos de entrega
-        navigate(`/entrega/${pedidoId}`);
-      }
+       setEstado('PAGADO');
+       navigate(`/exito/${pedidoId}`);
+     }
     };
 
     channel
@@ -88,10 +87,10 @@ export default function Checkout() {
             .maybeSingle();
           if (!error) {
             const st = (data?.estado || '').toString().toUpperCase();
-            if (st === 'PAGADO') {
-              clearInterval(pollTimer.current); pollTimer.current = null;
-              setEstado('PAGADO');
-              navigate(`/entrega/${pedidoId}`);
+             if (st === 'PAGADO') {
+             clearInterval(pollTimer.current); pollTimer.current = null;
+             setEstado('PAGADO');
+             navigate(`/exito/${pedidoId}`);
             }
           }
         } catch {}
@@ -116,8 +115,8 @@ export default function Checkout() {
       const next = (data?.estado || '').toString().toUpperCase();
       if (next === 'PAGADO') {
         setEstado('PAGADO');
-        navigate(`/entrega/${pedidoId}`);
-      } else {
+        navigate(`/exito/${pedidoId}`);
+        } else {
         setEstado(next || 'PENDIENTE');
       }
     } catch (e) {

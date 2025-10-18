@@ -11,7 +11,6 @@ import ToasterMC from './components/ToasterMC.jsx';
 import FooterMC from './components/FooterMC.jsx';
 import ChatbotMC from './components/ChatbotMC.jsx';
 
-// Páginas (lazy)
 const Home = lazy(()=>import('./pages/Home.jsx'));
 const Catalogo = lazy(()=>import('./pages/Catalogo.jsx'));
 const ProductoDetalle = lazy(()=>import('./pages/ProductoDetalle.jsx'));
@@ -36,12 +35,10 @@ const Reportes = lazy(()=>import('./pages/Reportes.jsx'));
 const NotFound = lazy(()=>import('./pages/NotFound.jsx'));
 const Bienvenido = lazy(()=>import('./pages/Bienvenido.jsx'));
 const Codigo = lazy(()=>import('./pages/Codigo.jsx'));
-
-// NUEVOS
 const AdminUsuarios = lazy(()=>import('./pages/AdminUsuarios.jsx'));
 const Entrega = lazy(()=>import('./pages/Entrega.jsx'));
-const PedidosProductor = lazy(()=>import('./pages/productor/Pedidos.jsx'));                // <—
-const PedidoDetalleProductor = lazy(()=>import('./pages/productor/PedidoDetalle.jsx'));    // <—
+const PedidosProductor = lazy(()=>import('./pages/productor/Pedidos.jsx'));
+const PedidoDetalleProductor = lazy(()=>import('./pages/productor/PedidoDetalle.jsx'));
 
 export default function App(){
   return (
@@ -60,38 +57,29 @@ export default function App(){
               <Route path="/productor/:uid" element={<ProductorPerfilPublico />} />
 
               <Route path="/login" element={<Login />} />
-              <Route path="/codigo" element={<Codigo/>} />
+              <Route path="/codigo" element={<Codigo />} />
               <Route path="/registro-cliente" element={<RegistroCliente />} />
               <Route path="/registro" element={<Navigate to="/registro-cliente" replace />} />
               <Route path="/recuperar" element={<Recuperar />} />
               <Route path="/restablecer" element={<Restablecer />} />
-
-              <Route path="/solicitud-productor" element={<ProtectedRoute><SolicitudProductor/></ProtectedRoute>} />
               <Route path="/verifica-correo" element={<VerificaCorreo />} />
-              <Route path="/perfil" element={<ProtectedRoute><Perfil/></ProtectedRoute>} />
-              <Route path="/carrito" element={<Carrito />} />
 
-              <Route path="/checkout/:pedidoId" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
-
-              <Route path="/exito/:pedidoId" element={<ProtectedRoute><Exito /></ProtectedRoute> }/>
-
-              {/* Nuevas rutas de entrega/éxito */}
+              {/* ✅ Ruta que faltaba */}
               <Route
-                path="/entrega/:pedidoId"
+                path="/solicitud-productor"
                 element={
                   <ProtectedRoute>
-                    <Entrega />
+                    <SolicitudProductor />
                   </ProtectedRoute>
                 }
               />
-              <Route
-                path="/exito/:pedidoId"
-                element={
-                  <div className="container py-4">
-                    <h4>¡Pago y datos de entrega guardados! 🎉</h4>
-                  </div>
-                }
-              />
+
+              <Route path="/perfil" element={<ProtectedRoute><Perfil/></ProtectedRoute>} />
+              <Route path="/carrito" element={<Carrito />} />
+
+              <Route path="/checkout/:pedidoId" element={<ProtectedRoute><Checkout/></ProtectedRoute>} />
+              <Route path="/entrega/:pedidoId" element={<ProtectedRoute><Entrega/></ProtectedRoute>} />
+              <Route path="/exito/:pedidoId" element={<ProtectedRoute><Exito/></ProtectedRoute>} />
 
               {/* Panel productor */}
               <Route
@@ -114,14 +102,12 @@ export default function App(){
                   </ProtectedRoute>
                 }
               />
-
-              {/* 👇 NUEVAS RUTAS solicitadas */}
               <Route
                 path="/productor/pedidos"
                 element={
                   <ProtectedRoute>
                     <RoleGuard allow={['productor','admin']}>
-                      <PedidosProductor />
+                      <PedidosProductor/>
                     </RoleGuard>
                   </ProtectedRoute>
                 }
@@ -131,25 +117,61 @@ export default function App(){
                 element={
                   <ProtectedRoute>
                     <RoleGuard allow={['productor','admin']}>
-                      <PedidoDetalleProductor />
+                      <PedidoDetalleProductor/>
                     </RoleGuard>
                   </ProtectedRoute>
                 }
               />
 
               <Route path="/mis-pedidos" element={<ProtectedRoute><MisPedidos/></ProtectedRoute>} />
-              <Route path="/reportes" element={<ProtectedRoute><RoleGuard allow={['productor','admin']}><Reportes/></RoleGuard></ProtectedRoute>} />
+              <Route
+                path="/reportes"
+                element={
+                  <ProtectedRoute>
+                    <RoleGuard allow={['productor','admin']}>
+                      <Reportes/>
+                    </RoleGuard>
+                  </ProtectedRoute>
+                }
+              />
 
               {/* Admin */}
-              <Route path="/admin/solicitudes" element={<ProtectedRoute><RoleGuard allow={['admin']}><AdminSolicitudes/></RoleGuard></ProtectedRoute>} />
-              <Route path="/admin/pedidos" element={<ProtectedRoute><RoleGuard allow={['admin']}><AdminPedidos/></RoleGuard></ProtectedRoute>} />
-              <Route path="/admin/categorias" element={<ProtectedRoute><RoleGuard allow={['admin']}><AdminCategorias/></RoleGuard></ProtectedRoute>} />
+              <Route
+                path="/admin/solicitudes"
+                element={
+                  <ProtectedRoute>
+                    <RoleGuard allow={['admin']}>
+                      <AdminSolicitudes/>
+                    </RoleGuard>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/pedidos"
+                element={
+                  <ProtectedRoute>
+                    <RoleGuard allow={['admin']}>
+                      <AdminPedidos/>
+                    </RoleGuard>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/categorias"
+                element={
+                  <ProtectedRoute>
+                    <RoleGuard allow={['admin']}>
+                      <AdminCategorias/>
+                    </RoleGuard>
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/admin/usuarios"
                 element={
                   <ProtectedRoute>
                     <RoleGuard allow={['admin']}>
-                      <AdminUsuarios />
+                      <AdminUsuarios/>
                     </RoleGuard>
                   </ProtectedRoute>
                 }
@@ -161,7 +183,7 @@ export default function App(){
           </Suspense>
         </div>
 
-        <ChatbotMC/>
+        <ChatbotMC />
         <FooterMC />
       </CartProvider>
     </AuthProvider>
